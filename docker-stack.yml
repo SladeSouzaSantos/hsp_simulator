@@ -18,7 +18,7 @@ services:
   # API com nome único para não conflitar com outros projetos
   api-hsp:
     image: ghcr.io/sladesouzasantos/hsp_simulator:main
-    command: python -m uvicorn api:app --host 0.0.0.0 --port 8000
+    command: python -m uvicorn api:app --host 0.0.0.0 --port 8000 --workers 4
     deploy:
       replicas: 1
       restart_policy:

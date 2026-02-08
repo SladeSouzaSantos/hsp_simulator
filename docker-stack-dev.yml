@@ -3,7 +3,7 @@ version: '3.8'
 services:
   api-hsp-dev:
     image: ghcr.io/sladesouzasantos/hsp_simulator:dev
-    command: python -m uvicorn api:app --host 0.0.0.0 --port 8000
+    command: python -m uvicorn api:app --host 0.0.0.0 --port 8000 --workers 4
     deploy:
       replicas: 1
       placement:
