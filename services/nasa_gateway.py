@@ -4,13 +4,17 @@ from functools import lru_cache
 class NasaPowerGateway:
     def __init__(self, lat, lon):
         self.url = "https://power.larc.nasa.gov/api/temporal/climatology/point"
-        self.lat = lat
-        self.lon = lon
+        # Arredondamos na entrada para garantir consistência
+        self.lat = round(float(lat), 4)
+        self.lon = round(float(lon), 4)
 
-    # O segredo está aqui: o Python guarda o resultado baseado nos argumentos
-    # Como lat/lon são os identificadores do local, usamos eles no cache
-    @lru_cache(maxsize=32)
-    def _get_data(self, lat, lon):
+    @staticmethod
+    @lru_cache(maxsize=128)
+    def _get_cached_data(url, lat, lon):
+        """
+        Método estático para que o cache seja compartilhado entre todas 
+        as instâncias da classe dentro do mesmo worker.
+        """
         params = {
             "parameters": "ALLSKY_SFC_SW_DWN,ALLSKY_SFC_SW_DIFF,T2M,T2M_MAX,RH2M,WS10M",
             "community": "SB",
@@ -19,8 +23,8 @@ class NasaPowerGateway:
             "format": "JSON"
         }
         
-        print(f"\n[NASA API] Consultando novas coordenadas: {lat}, {lon}...")
-        response = requests.get(self.url, params=params)
+        print(f"\n[NASA API] Buscando dados novos para Lat: {lat}, Lon: {lon}...")
+        response = requests.get(url, params=params, timeout=10)
         
         if response.status_code == 200:
             return response.json()['properties']['parameter']
@@ -29,6 +33,6 @@ class NasaPowerGateway:
 
     def fetch_climatology(self):
         """
-        Método público que utiliza o cache interno.
+        Chama o cache centralizado usando as coordenadas já arredondadas.
         """
-        return self._get_data(self.lat, self.lon)
+        return self._get_cached_data(self.url, self.lat, self.lon)

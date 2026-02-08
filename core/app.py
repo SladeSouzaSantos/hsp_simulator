@@ -1,3 +1,4 @@
+import json
 from services.nasa_gateway import NasaPowerGateway
 from services.solar_service import SolarDataService
 from core.perez_engine import PerezEngine

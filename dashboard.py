@@ -52,14 +52,16 @@ with st.sidebar:
     alb = st.slider("Albedo Ajustado", 0.0, 1.0, float(ALBEDO_REFERENCE[tipo_solo]))
     
 if st.button("Calcular e Comparar"):
-    chave_local = f"{lat}_{lon}"
+    lat_fixed = round(float(lat), 4)
+    lon_fixed = round(float(lon), 4)
+    chave_local = f"{lat_fixed}_{lon_fixed}"
     
     # 1. Gerenciamento de Dados (NASA)
     if chave_local in st.session_state.cache_nasa:
         dados_clima = st.session_state.cache_nasa[chave_local]
     else:
         with st.spinner("Buscando novos dados na NASA..."):
-            gateway = NasaPowerGateway(lat, lon)
+            gateway = NasaPowerGateway(lat_fixed, lon_fixed)
             dados_clima = SolarDataService.standardize_data(gateway.fetch_climatology())
             st.session_state.cache_nasa[chave_local] = dados_clima
             st.success("✅ Dados carregados!")
