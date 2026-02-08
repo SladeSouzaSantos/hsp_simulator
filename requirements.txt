@@ -1,0 +1,7 @@
+streamlit
+pandas
+altair
+numpy
+requests
+fastapi
+uvicorn

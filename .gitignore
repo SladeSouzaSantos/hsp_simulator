@@ -1,0 +1,40 @@
+# Python (Arquivos compilados)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Ambientes Virtuais
+venv/
+.venv/
+env/
+ENV/
+
+# Streamlit e Logs
+.streamlit/
+*.log
+
+# Dados e Configurações Sensíveis
+data/*.csv
+data/*.json
+.env
+
+# Sistema (macOS / Windows)
+.DS_Store
+Thumbs.db
