@@ -121,4 +121,4 @@ jobs:
           
           echo "🌐 Testando acesso em http://100.71.249.12:$PORT"
           # O Streamlit retorna 200 OK quando a página carrega
-          curl --retry 3 --retry-delay 10 --connect-timeout 20 -f http://100.71.249.12:$PORT || exit 1
+          curl --retry 15 --retry-delay 10 --retry-all-errors --connect-timeout 10 -f http://100.71.249.12:$PORT || exit 1
