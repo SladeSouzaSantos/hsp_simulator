@@ -5,8 +5,27 @@ on:
     branches: [ main, dev ]
 
 jobs:
+  # 🔍 JOB 1: VALIDAÇÃO (LINT)
+  lint:
+    name: Lint Code Base
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Lint Python & Configs
+        uses: github/super-linter@v5
+        env:
+          VALIDATE_ALL_CODEBASE: false
+          DEFAULT_BRANCH: main
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VALIDATE_PYTHON_BLACK: true # Garante padrão de código Python
+          VALIDATE_YAML: true
+
+  # 🏗️ JOB 2: BUILD E PUSH
   build:
     name: Build and Push Image
+    needs: lint
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -14,6 +33,9 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+
+      - name: Lowercase Repo Name
+        run: echo "REPO_LOWER=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -35,9 +57,10 @@ jobs:
           platforms: linux/arm64
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}:${{ github.ref_name }}
-            ghcr.io/${{ github.repository }}:latest
+            ghcr.io/${{ env.REPO_LOWER }}:${{ github.ref_name }}
+            ghcr.io/${{ env.REPO_LOWER }}:latest
 
+  # 🚀 JOB 3: DEPLOY
   deploy:
     name: Deploy to Raspberry Pi
     needs: build
@@ -69,8 +92,33 @@ jobs:
             
             mkdir -p $DEST_DIR
             cd $DEST_DIR
-            
-            # CRIAÇÃO DO .ENV (Igual ao seu projeto de orçamento)
             echo "API_URL=$API_VAL" > .env
             
             docker stack deploy -c $STACK_FILE $STACK_NAME --with-registry-auth --resolve-image always --prune
+
+  # ✅ JOB 4: VERIFICAÇÃO (HEALTH CHECK)
+  healthcheck:
+    name: Verify Deployment
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@v2
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+
+      - name: Wait and Check URL
+        run: |
+          echo "⏳ Aguardando 60 segundos para o hardware do Raspberry estabilizar..."
+          sleep 60
+          
+          # No projeto HSP, o dashboard fica em portas diferentes
+          if [ "${{ github.ref_name }}" == "main" ]; then
+            PORT=8090
+          else
+            PORT=8091
+          fi
+          
+          echo "🌐 Testando acesso em http://100.71.249.12:$PORT"
+          # O Streamlit retorna 200 OK quando a página carrega
+          curl --retry 3 --retry-delay 10 --connect-timeout 20 -f http://100.71.249.12:$PORT || exit 1
