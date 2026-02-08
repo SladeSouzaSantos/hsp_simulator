@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 import pandas as pd
 import altair as alt
@@ -6,6 +7,9 @@ from core.app import calcular_projeto_solar
 from utils.constants import ALBEDO_REFERENCE, CELL_TECHNOLOGY_REFERENCE
 from services.nasa_gateway import NasaPowerGateway
 from services.solar_service import SolarDataService
+
+# O Docker injeta a API_URL aqui através do arquivo .env
+API_BASE_URL = os.getenv("API_URL")
 
 st.set_page_config(page_title="Dimensionador HSP", layout="wide")
 st.title("☀️ Comparativo Solar: Projeto vs. Referência (0°/0°)")
