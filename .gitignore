@@ -34,6 +34,7 @@ ENV/
 data/*.csv
 data/*.json
 .env
+!data/localidades.json
 
 # Sistema (macOS / Windows)
 .DS_Store
