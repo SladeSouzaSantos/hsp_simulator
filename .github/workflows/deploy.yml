@@ -5,7 +5,7 @@ on:
     branches: [ main, dev ]
 
 jobs:
-  # 🔍 JOB 1: VALIDAÇÃO (LINT)
+
   lint:
     name: Lint Code Base
     runs-on: ubuntu-latest
@@ -19,11 +19,12 @@ jobs:
           VALIDATE_ALL_CODEBASE: false
           DEFAULT_BRANCH: main
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VALIDATE_PYTHON_BLACK: true # Garante padrão de código Python
+          VALIDATE_PYTHON_BLACK: true 
           VALIDATE_YAML: true
 
-  # 🏗️ JOB 2: BUILD E PUSH
+
   build:
+    
     name: Build and Push Image
     needs: lint
     runs-on: ubuntu-latest
@@ -60,17 +61,34 @@ jobs:
             ghcr.io/${{ env.REPO_LOWER }}:${{ github.ref_name }}
             ghcr.io/${{ env.REPO_LOWER }}:latest
 
-  # 🚀 JOB 3: DEPLOY
+
   deploy:
+
     name: Deploy to Raspberry Pi
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
       - name: Connect to Tailscale
         uses: tailscale/github-action@v2
         with:
           authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
 
+      # 1. ENVIAR ARQUIVOS (SCP) - Garante que o nginx.conf e o stack.yml novos cheguem lá
+      - name: Copy Config Files via SCP
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          # Envia os arquivos de configuração para a pasta temporária
+          source: "docker-stack.yml,docker-stack-dev.yml,docker/nginx.conf"
+          target: "/tmp/hsp-deploy-${{ github.ref_name }}"
+          strip_components: 0
+
+      # 2. EXECUTAR DEPLOY (SSH)
       - name: Execute Remote Deploy
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -91,13 +109,20 @@ jobs:
             fi
             
             mkdir -p $DEST_DIR
+            # Move os arquivos da pasta temporária do SCP para a pasta do App
+            cp -r /tmp/hsp-deploy-${{ github.ref_name }}/* $DEST_DIR/
+            
             cd $DEST_DIR
             echo "API_URL=$API_VAL" > .env
             
+            # Login no GHCR dentro do servidor para evitar erro de pull
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            
             docker stack deploy -c $STACK_FILE $STACK_NAME --with-registry-auth --resolve-image always --prune
 
-  # ✅ JOB 4: VERIFICAÇÃO (HEALTH CHECK)
+
   healthcheck:
+    
     name: Verify Deployment
     needs: deploy
     runs-on: ubuntu-latest
@@ -109,16 +134,14 @@ jobs:
 
       - name: Wait and Check URL
         run: |
-          echo "⏳ Aguardando 60 segundos para o hardware do Raspberry estabilizar..."
+          echo "⏳ Aguardando inicialização..."
           sleep 60
           
-          # No projeto HSP, o dashboard fica em portas diferentes
-          if [ "${{ github.ref_name }}" == "main" ]; then
+          if [ "${{ github.ref_name }}" == "main" ]; then 
             PORT=8090
-          else
+          else 
             PORT=8091
           fi
           
-          echo "🌐 Testando acesso em http://100.71.249.12:$PORT"
-          # O Streamlit retorna 200 OK quando a página carrega
-          curl --retry 15 --retry-delay 10 --retry-all-errors --connect-timeout 10 -f http://100.71.249.12:$PORT || exit 1
+          echo "🌐 Testando acesso em http://${{ secrets.SERVER_HOST }}:$PORT"
+          curl --retry 15 --retry-delay 10 --retry-all-errors --connect-timeout 10 -f http://${{ secrets.SERVER_HOST }}:$PORT || exit 1
