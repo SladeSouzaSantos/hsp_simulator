@@ -3251,6 +3251,57 @@
     },
     "PR": {
         "nome_estado": "Paraná",
-        "cidades": []
+        "cidades": [
+            {
+                "nome": "Curitiba",
+                "latitude": -25.4375,
+                "longitude": -49.2500
+            },
+            {
+                "nome": "Londrina",
+                "latitude": -23.3125,
+                "longitude": -51.1875
+            },
+            {
+                "nome": "Maringa",
+                "latitude": -23.4375,
+                "longitude": -51.9375
+            },
+            {
+                "nome": "Foz do Iguacu",
+                "latitude": -25.5625,
+                "longitude": -54.5625
+            },
+            {
+                "nome": "Cascavel",
+                "latitude": -24.9375,
+                "longitude": -53.4375
+            },
+            {
+                "nome": "Ponta Grossa",
+                "latitude": -25.0625,
+                "longitude": -50.1875
+            },
+            {
+                "nome": "Guarapuava",
+                "latitude": -25.3750,
+                "longitude": -51.4375
+            },
+            {
+                "nome": "Pato Branco",
+                "latitude": -26.2500,
+                "longitude": -52.6875
+            },
+            {
+                "nome": "Paranagua",
+                "latitude": -25.5000,
+                "longitude": -48.5000
+            },
+            {
+                "nome": "Umuarama",
+                "latitude": -23.7500,
+                "longitude": -53.3125
+            }
+        ]
     }
 }

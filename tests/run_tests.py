@@ -1,3 +1,6 @@
+import os
+import json
+import pandas as pd
 from core.app import calcular_projeto_solar
 from tests.test_scenarios import SCENARIOS
 from utils.constants import CELL_TECHNOLOGY_REFERENCE
@@ -89,5 +92,192 @@ def run_simulation():
         
     print(f"\n[FIM] Simulação concluída. Verifique a pasta 'data/' para os resultados.")
 
+def run_deep_validation():
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(current_dir)
+    loc_path = os.path.join(project_root, 'data', 'localidades.json')
+    gabarito_path = os.path.join(project_root, 'data', 'amostragem_sundata.json')
+
+    if not os.path.exists(loc_path) or not os.path.exists(gabarito_path):
+        print("❌ Erro: Arquivos não encontrados.")
+        return
+
+    with open(loc_path, 'r', encoding='utf-8') as f:
+        locs = json.load(f)
+    with open(gabarito_path, 'r', encoding='utf-8') as f:
+        gabarito = json.load(f)
+
+    # Lista para armazenar os dados do CSV
+    export_data = []
+
+    print("\n" + "="*110)
+    print(f"{'CIDADE':<15} | {'ANG':>3} | {'NASA (API)':>10} | {'SUN_DATA':>10} | {'ERRO API%':>9} | {'G.ANG API%':>10} | {'G.ANG SUN%':>10}")
+    print("-" * 110)
+
+    for cidade_nome, inclinações in gabarito.items():
+        coords = None
+        for estado in locs.values():
+            for c in estado['cidades']:
+                if c['nome'].strip().lower() == cidade_nome.strip().lower():
+                    coords = c
+                    break
+        
+        if not coords: continue
+
+        gateway = NasaPowerGateway(coords['latitude'], coords['longitude'])
+        dados_clima = SolarDataService.standardize_data(gateway.fetch_climatology())
+
+        api_ref_0 = None
+        sun_ref_0 = None
+        sorted_incs = sorted(inclinações.keys(), key=int)
+
+        for inc_str in sorted_incs:
+            inc = int(inc_str)
+            
+            res = calcular_projeto_solar(
+                coords['latitude'], coords['longitude'], 
+                inclinacao=inc, azimute=0, albedo=0.2, altura=1.5,
+                tecnologia="TOPCON", is_bifacial=False, 
+                dados_pre_carregados=dados_clima
+            )
+
+            hsp_api = res["media"]
+            hsp_sun = inclinações[inc_str].get("Anual", 0)
+            erro_fontes = ((hsp_api / hsp_sun) - 1) * 100 if hsp_sun > 0 else 0
+
+            # Cálculos de Ganho Angular
+            val_g_ang_api = 0.0
+            val_g_ang_sun = 0.0
+
+            if inc == 0:
+                api_ref_0 = hsp_api
+                sun_ref_0 = hsp_sun
+                g_ang_api_str = "---"
+                g_ang_sun_str = "---"
+            else:
+                val_g_ang_api = ((hsp_api / api_ref_0) - 1) * 100 if api_ref_0 else 0
+                val_g_ang_sun = ((hsp_sun / sun_ref_0) - 1) * 100 if sun_ref_0 else 0
+                g_ang_api_str = f"{val_g_ang_api:>+6.1f}%"
+                g_ang_sun_str = f"{val_g_ang_sun:>+6.1f}%"
+
+            # Print no terminal
+            print(f"{cidade_nome:<15} | {inc:>3}° | {hsp_api:>10.2f} | {hsp_sun:>10.2f} | {erro_fontes:>8.1f}% | {g_ang_api_str:>10} | {g_ang_sun_str:>10}")
+
+            # Adiciona à lista de exportação (convertendo strings de % para números para facilitar análise no Excel)
+            export_data.append({
+                "Cidade": cidade_nome,
+                "Angulo": inc,
+                "HSP_NASA_API": round(hsp_api, 3),
+                "HSP_SUN_DATA": round(hsp_sun, 3),
+                "Erro_Fontes_Percent": round(erro_fontes, 2),
+                "Ganho_Angular_API_Percent": round(val_g_ang_api, 2) if inc != 0 else 0,
+                "Ganho_Angular_SunData_Percent": round(val_g_ang_sun, 2) if inc != 0 else 0
+            })
+
+    # Exportação Final usando Pandas
+    if export_data:
+        df = pd.DataFrame(export_data)
+        output_path = os.path.join(project_root, 'data', 'ANALISE_COMPLETA_VALIDACAO.csv')
+        df.to_csv(output_path, index=False, encoding='utf-8-sig')
+        print("\n" + "="*110)
+        print(f"✅ Análise exportada com sucesso para: {output_path}")
+
+def run_transposition_test():
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(current_dir)
+    loc_path = os.path.join(project_root, 'data', 'localidades.json')
+    gabarito_path = os.path.join(project_root, 'data', 'amostragem_sundata.json')
+
+    with open(loc_path, 'r', encoding='utf-8') as f:
+        locs = json.load(f)
+    with open(gabarito_path, 'r', encoding='utf-8') as f:
+        gabarito = json.load(f)
+
+    print("\n" + "="*100)
+    print(f"{'CIDADE':<15} | {'ANG':>3} | {'REAL 0°':>8} | {'ESTIMADO':>10} | {'REAL ANG':>10} | {'DIFERENÇA'}")
+    print("-" * 100)
+
+    results = []
+
+    for cidade_nome, inclinações in gabarito.items():
+        coords = None
+        for estado in locs.values():
+            for c in estado['cidades']:
+                if c['nome'].strip().lower() == cidade_nome.strip().lower():
+                    coords = c
+                    break
+        if not coords: continue
+
+        gateway = NasaPowerGateway(coords['latitude'], coords['longitude'])
+        dados_clima = SolarDataService.standardize_data(gateway.fetch_climatology())
+
+        # Passo 1: Pegar a base real de 0 graus do SunData
+        real_sundata_0 = inclinações.get("0", {}).get("Anual")
+        
+        # Passo 2: Calcular o valor simulado a 0 para criar o fator de proporção
+        sim_0 = calcular_projeto_solar(coords['latitude'], coords['longitude'], 0, 0, 0.2, 1.5, "TOPCON", False, dados_clima)["media"]
+
+        for inc_str, ref_data in inclinações.items():
+            inc = int(inc_str)
+            if inc == 0: continue # Pula a referência
+
+            # Passo 3: Calcular o valor simulado para o ângulo alvo
+            sim_alvo = calcular_projeto_solar(coords['latitude'], coords['longitude'], inc, 0, 0.2, 1.5, "TOPCON", False, dados_clima)["media"]
+            
+            # Passo 4: O fator de ganho do seu motor
+            fator_transposicao = sim_alvo / sim_0
+            
+            # Passo 5: Aplicar o seu fator à base real do SunData
+            hsp_estimado = real_sundata_0 * fator_transposicao
+            hsp_real_angulo = ref_data.get("Anual")
+            
+            erro_transp = ((hsp_estimado / hsp_real_angulo) - 1) * 100
+
+            print(f"{cidade_nome:<15} | {inc:>3}° | {real_sundata_0:>8.2f} | {hsp_estimado:>10.2f} | {hsp_real_angulo:>10.2f} | {erro_transp:>+8.2f}%")
+            
+            results.append({
+                "Cidade": cidade_nome,
+                "Angulo": inc,
+                "Base_0_Real": real_sundata_0,
+                "Estimado_pela_API": round(hsp_estimado, 3),
+                "Real_no_Gabarito": hsp_real_angulo,
+                "Erro_da_Logica_%": round(erro_transp, 2)
+            })
+
+    if results:
+        df = pd.DataFrame(results)
+        df.to_csv(os.path.join(project_root, 'data', 'TESTE_TRANSPOSICAO_PURA.csv'), index=False, encoding='utf-8-sig')
+        print("="*100)
+        print("✅ Teste de transposição concluído e salvo em 'data/'.")
+
 if __name__ == "__main__":
-    run_simulation()
+    while True:
+        print("\n" + "="*50)
+        print("        PAINEL DE TESTES E VALIDAÇÃO SOLAR")
+        print("="*50)
+        print(" [1] Simulação Técnica (Cenários/Bifacial)")
+        print(" [2] Comparativo de Fontes (SunData vs NASA)")
+        print(" [3] Teste de Transposição Pura (Lógica da API)")
+        print(" [4] Executar Todos os Testes")
+        print(" [0] Sair")
+        print("="*50)
+        
+        escolha = input("Selecione uma opção: ").strip()
+
+        if escolha == "1":
+            run_simulation()
+        elif escolha == "2":
+            run_deep_validation()
+        elif escolha == "3":
+            run_transposition_test()
+        elif escolha == "4":
+            print("\n🚀 Iniciando bateria completa de testes...")
+            run_simulation()
+            run_deep_validation()
+            run_transposition_test()
+            print("\n✅ Todos os relatórios foram gerados na pasta 'data/'.")
+        elif escolha == "0":
+            print("\nEncerrando... Até logo!")
+            break
+        else:
+            print("\n⚠️ Opção inválida! Tente novamente.")

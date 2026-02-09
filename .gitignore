@@ -35,6 +35,7 @@ data/*.csv
 data/*.json
 .env
 !data/localidades.json
+!data/amostragem_sundata.json
 
 # Sistema (macOS / Windows)
 .DS_Store

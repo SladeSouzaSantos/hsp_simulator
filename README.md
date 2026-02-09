@@ -50,6 +50,39 @@ A resposta retorna a média anual e uma lista (`mensal`) contendo os valores de 
 - `api.py`: Porta de entrada para requisições via API.
 - `dashboard.py`: Interface visual interativa.
 
+## ⚖️ Validação e Rigor Técnico
+
+Para garantir a precisão dos cálculos, o projeto conta com uma bateria de testes que compara os resultados do motor com o **SunData (CRESESB)**, a principal referência de engenharia solar no Brasil.
+
+### Resultados Obtidos (Transposição Pura)
+O teste de "Transposição Pura" isola a lógica matemática do simulador. Utilizamos o valor base (0°) do SunData e aplicamos o nosso motor para prever o HSP em outros ângulos:
+
+| Cidade | Latitude | Erro Médio (vs SunData) | Precisão |
+| :--- | :--- | :--- | :--- |
+| Natal/RN | -5.81° | **0.00%** | Cirúrgica |
+| Petrolina/PE | -9.43° | **+0.39%** | Alta |
+| Porto Alegre/RS | -30.06° | **+1.12%** | Alta |
+
+> [!TIP]
+> A precisão de 0.00% em latitudes próximas ao equador demonstra que a implementação do modelo de transposição está perfeitamente alinhada com os padrões de mercado.
+
+## 🧪 Como Executar os Testes de Validação
+
+O projeto inclui um painel interativo para validar novas implementações ou verificar a precisão em diferentes localidades.
+
+1. Certifique-se de que os arquivos `localidades.json` e `amostragem_sundata.json` estão na pasta `data/`.
+2. Execute o painel de testes:
+
+```bash
+python -m tests.run_tests
+```
+
+### Opções Disponíveis no Painel:
+* **[1] Simulação Técnica:** Gera cenários complexos (Muro solar, variação de altura e albedo) para testar o comportamento bifacial.
+* **[2] Comparativo de Fontes:** Compara diretamente os dados brutos da NASA POWER com o SunData (CRESESB).
+* **[3] Teste de Transposição Pura:** O teste mais rigoroso; valida se a física de inclinação da API é idêntica à dos softwares de referência.
+* **[4] Executar Tudo:** Gera relatórios detalhados em `.csv` na pasta `data/` para análise profunda.
+
 ## 🚀 Como começar
 
 1. Instale as dependências:
