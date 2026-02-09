@@ -13,7 +13,7 @@ services:
 
   dashboard-dev:
     image: ghcr.io/sladesouzasantos/hsp_simulator:dev
-    command: streamlit run dashboard.py --server.port 8501 --server.address 0.0.0.0
+    command: streamlit run dashboard.py --server.port 8501 --server.address 0.0.0.0 --server.enableCORS false --server.enableXsrfProtection false
     env_file:
       - .env
     ports:
