@@ -134,7 +134,14 @@ jobs:
 
       - name: Wait and Check URL
         run: |
-          sleep 60 if [ "${{ github.ref_name }}" == "main" ]; then PORT=8090; else PORT=8091; fi
+          echo "⏳ Aguardando inicialização..."
+          sleep 60
+          
+          if [ "${{ github.ref_name }}" == "main" ]; then 
+            PORT=8090
+          else 
+            PORT=8091
+          fi
           
           echo "🌐 Testando acesso em http://${{ secrets.SERVER_HOST }}:$PORT"
           curl --retry 15 --retry-delay 10 --retry-all-errors --connect-timeout 10 -f http://${{ secrets.SERVER_HOST }}:$PORT || exit 1
