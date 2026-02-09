@@ -84,7 +84,7 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           # Envia os arquivos de configuração para a pasta temporária
-          source: "docker-stack.yml,docker-stack-dev.yml,docker/nginx.conf"
+          source: "docker-stack.yml,docker-stack-dev.yml,docker/*.conf"
           target: "/tmp/hsp-deploy-${{ github.ref_name }}"
           strip_components: 0
 
@@ -109,6 +109,10 @@ jobs:
             fi
             
             mkdir -p $DEST_DIR
+            
+            #Limpa arquivos antigos para evitar conflito de Nginx
+            rm -rf $DEST_DIR/docker
+
             # Move os arquivos da pasta temporária do SCP para a pasta do App
             cp -r /tmp/hsp-deploy-${{ github.ref_name }}/* $DEST_DIR/
             
