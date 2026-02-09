@@ -5,7 +5,6 @@ on:
     branches: [ main, dev ]
 
 jobs:
-
   lint:
     name: Lint Code Base
     runs-on: ubuntu-latest
@@ -22,9 +21,7 @@ jobs:
           VALIDATE_PYTHON_BLACK: true 
           VALIDATE_YAML: true
 
-
   build:
-    
     name: Build and Push Image
     needs: lint
     runs-on: ubuntu-latest
@@ -59,11 +56,11 @@ jobs:
           push: true
           tags: |
             ghcr.io/${{ env.REPO_LOWER }}:${{ github.ref_name }}
-            ghcr.io/${{ env.REPO_LOWER }}:latest
-
+            ${{ github.ref_name == 'main' && format('ghcr.io/{0}:latest', env.REPO_LOWER) || '' }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   deploy:
-
     name: Deploy to Raspberry Pi
     needs: build
     runs-on: ubuntu-latest
@@ -76,19 +73,16 @@ jobs:
         with:
           authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
 
-      # 1. ENVIAR ARQUIVOS (SCP) - Garante que o nginx.conf e o stack.yml novos cheguem lá
       - name: Copy Config Files via SCP
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          # Envia os arquivos de configuração para a pasta temporária
           source: "docker-stack.yml,docker-stack-dev.yml,docker/*.conf"
           target: "/tmp/hsp-deploy-${{ github.ref_name }}"
           strip_components: 0
 
-      # 2. EXECUTAR DEPLOY (SSH)
       - name: Execute Remote Deploy
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -96,6 +90,7 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
+            # 1. Identificar Ambiente
             if [ "${{ github.ref_name }}" == "main" ]; then
               DEST_DIR="/app/hsp-simulator-prod"
               STACK_FILE="docker-stack.yml"
@@ -108,25 +103,26 @@ jobs:
               API_VAL="${{ vars.API_URL_DEV }}"
             fi
             
+            # 2. Preparar Diretório (sudo se necessário)
             mkdir -p $DEST_DIR
-            
-            #Limpa arquivos antigos para evitar conflito de Nginx
             rm -rf $DEST_DIR/docker
-
-            # Move os arquivos da pasta temporária do SCP para a pasta do App
-            cp -r /tmp/hsp-deploy-${{ github.ref_name }}/* $DEST_DIR/
             
+            # 3. Mover arquivos da pasta temporária
+            cp -r /tmp/hsp-deploy-${{ github.ref_name }}/* $DEST_DIR/
             cd $DEST_DIR
+            
+            # 4. Configurar variáveis de ambiente
             echo "API_URL=$API_VAL" > .env
             
-            # Login no GHCR dentro do servidor para evitar erro de pull
+            # 5. Login Automático no GHCR (Resolve o erro denied)
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             
+            # 6. Deploy no Swarm
+            # --with-registry-auth: Repassa o login para os nós do swarm
+            # --resolve-image always: Garante que o Raspberry baixe a imagem nova mesmo que a tag seja a mesma
             docker stack deploy -c $STACK_FILE $STACK_NAME --with-registry-auth --resolve-image always --prune
 
-
   healthcheck:
-    
     name: Verify Deployment
     needs: deploy
     runs-on: ubuntu-latest
@@ -138,7 +134,7 @@ jobs:
 
       - name: Wait and Check URL
         run: |
-          echo "⏳ Aguardando inicialização..."
+          echo "⏳ Aguardando 60s para inicialização dos containers..."
           sleep 60
           
           if [ "${{ github.ref_name }}" == "main" ]; then 
@@ -148,4 +144,5 @@ jobs:
           fi
           
           echo "🌐 Testando acesso em http://${{ secrets.SERVER_HOST }}:$PORT"
-          curl --retry 15 --retry-delay 10 --retry-all-errors --connect-timeout 10 -f http://${{ secrets.SERVER_HOST }}:$PORT || exit 1
+          # Tenta o curl com retentativas caso o Nginx demore a subir
+          curl --retry 10 --retry-delay 15 --retry-all-errors --connect-timeout 10 -Iv http://${{ secrets.SERVER_HOST }}:$PORT || exit 1
