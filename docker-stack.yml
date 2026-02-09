@@ -29,7 +29,7 @@ services:
       - greencity-net
 
   # Dashboard que lê a URL da API do arquivo .env
-  dashboard:
+  dashboard-hsp:
     image: ghcr.io/sladesouzasantos/hsp_simulator:main
     command: streamlit run dashboard.py --server.port 8501 --server.address 0.0.0.0 --server.enableCORS false --server.enableXsrfProtection false
     env_file:
