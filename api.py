@@ -2,7 +2,12 @@ from fastapi import FastAPI
 from pydantic import BaseModel, Field
 from core.app import calcular_projeto_solar
 
-app = FastAPI(title="HSP Simulator - Solar Engine API", description="API para cálculo de irradiância solar e ganho bifacial")
+app = FastAPI(
+    title="HSP Simulator - Solar Engine API", 
+    description="API para cálculo de irradiância solar e ganho bifacial",
+    openapi_url="/openapi.json",
+    root_path="/api"
+    )
 
 # Definimos o "Contrato" de entrada dos dados
 class ProjetoSolarRequest(BaseModel):
