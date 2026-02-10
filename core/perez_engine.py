@@ -18,7 +18,7 @@ class PerezEngine:
             return 0.0
 
         # Amostragem de 20 pontos entre o nascer e o pôr do sol
-        omega_points = np.linspace(-ws, ws, 20)
+        omega_points = np.linspace(-ws, ws, 100)
         shaded_count = 0
         
         for omega in omega_points:
@@ -42,6 +42,7 @@ class PerezEngine:
         beta = np.radians(tilt_deg)
         gamma = np.radians(azimuth_deg)
         results = []
+        perdas_mensais = []
         days_n = [17, 47, 75, 105, 135, 162, 198, 228, 258, 288, 318, 344]
 
         for i in range(12):
@@ -58,11 +59,12 @@ class PerezEngine:
                   (np.cos(self.lat_rad)*np.cos(beta) - np.sin(self.lat_rad)*np.sin(beta)*np.cos(gamma))*np.cos(delta)*np.sin(ws) - \
                   (np.sin(beta)*np.sin(gamma))*np.cos(delta)*(1-np.cos(ws))
             den = np.sin(self.lat_rad)*np.sin(delta)*ws + np.cos(self.lat_rad)*np.cos(delta)*np.sin(ws)
-            rb = num / den
+            rb = float(np.asarray(num / den).flatten()[0])
 
             # --- LÓGICA DE SOMBRA ---
             # Calculamos o fator de perda (ex: 0.2 se 20% do dia útil estiver sombreado)
             loss_factor = self._get_shading_loss_factor(n, delta, ws, obstacle_config)
+            perdas_mensais.append(loss_factor)
             
             # Aplicamos a perda apenas na componente DIRETA (gh - dh)
             # Se houver sombra, reduzimos o rb proporcionalmente
@@ -94,10 +96,15 @@ class PerezEngine:
                 h_rear = (h_beam_rear + h_diff_rear + h_refl_rear) * self.b_factor
                 h_total += h_rear
 
-            results.append(max(0, h_total))
+            val_final = np.asarray(h_total).flatten()[0]
+            
+            results.append(float(max(0, val_final)))
+
+        media_hsp = float(np.mean(results))
+        media_perda = (sum(perdas_mensais) / 12) * 100 if obstacle_config else 0
 
         return {
-            "media": round(sum(results) / 12, 3), 
+            "media": round(media_hsp, 3),
             "mensal": [round(val, 3) for val in results],
-            "perda_sombreamento_estimada": f"{loss_factor*100:.1f}%" if obstacle_config else "0%"
+            "perda_sombreamento_estimada": f"{media_perda:.1f}%" if obstacle_config else "0%"
         }

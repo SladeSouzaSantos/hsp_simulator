@@ -17,20 +17,24 @@ class ShadowEngine:
                - 'az_parede': Azimute para onde a parede está "olhando" (deg)
                - 'largura': Largura da parede (m)
         """
+        
+        if not obstacle_config:
+            return 0.0
+        
         # Se o sol está abaixo do horizonte, tecnicamente é "sombra" (noite)
         if sun_alt_deg <= 0:
             return 1.0 # 100% de perda direta
 
-        h_obs = obstacle_config.get('altura', 4.0)
-        d_obs = obstacle_config.get('distancia', 2.0)
-        az_obs = obstacle_config.get('az_parede', 45.0) 
-        w_obs = obstacle_config.get('largura', 4.0)
+        h_obs = obstacle_config.get('height', 0.0)
+        d_obs = obstacle_config.get('distance', 1.0)
+        az_obs = obstacle_config.get('azimuth', 0.0) 
+        w_obs = obstacle_config.get('width', 10.0)
 
-        # 1. Comprimento da sombra projetada (L = H / tan(alt))
-        l_sombra = h_obs / np.tan(np.radians(sun_alt_deg))
+        # 1. Ângulo crítico de elevação do obstáculo (theta = arctan(H/D))
+        # É mais seguro comparar ângulos do que calcular o comprimento da sombra (evita tan(0))
+        angulo_critico_alt = np.degrees(np.arctan2(h_obs, d_obs))
 
-        # 2. Verificação de Azimute (O sol está na 'fatia' da parede?)
-        # Calculamos a abertura angular que a largura da parede ocupa na visão da placa
+        # 2. Verificação de Azimute (Abertura da parede)
         meio_angulo_abertura = np.degrees(np.arctan2(w_obs / 2, d_obs))
         
         # Diferença angular mínima entre o sol e o centro da parede
@@ -40,7 +44,7 @@ class ShadowEngine:
 
         # 3. Decisão Booleana: Sol atrás da parede e sombra alcança a placa?
         if diff_az <= meio_angulo_abertura:
-            if l_sombra >= d_obs:
+            if sun_alt_deg <= angulo_critico_alt:
                 return 1.0 # Obstrução total do raio direto
         
         return 0.0 # Sem sombra
