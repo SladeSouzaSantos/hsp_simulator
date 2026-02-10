@@ -121,7 +121,7 @@ def renderizar_layout_comparativo(lat, lon, inc, azi, alb, h, tec_chave, modo_bi
             # O .style.format força o Streamlit a mostrar 3 casas decimais em tudo
             st.table(df_table.style.format("{:.3f}"))
 
-def renderizar_grafico_sombra(meses_lista, mes_v, hora_sim, lat, h, usar_obstaculo, h_obs, d_obs, azi_obs, azi):
+def renderizar_grafico_sombra(meses_lista, mes_v, hora_sim, lat, h, usar_obstaculo, h_obs, d_obs, azi_obs, azi, largura_obj=4.0, orientacao="Paisagem"):
     mes_num = meses_lista.index(mes_v) + 1
     dia_ano = datetime(2026, mes_num, 21).timetuple().tm_yday
     
@@ -158,12 +158,14 @@ def renderizar_grafico_sombra(meses_lista, mes_v, hora_sim, lat, h, usar_obstacu
         ))
     # =================================================================
 
-    # --- ELEMENTO 1: O PAINEL (Escala Real 2.4m) ---
+    # --- ELEMENTO 1: O PAINEL (Escala Real 2.278m) ---
+    # 1. Ajuste do Raio do Painel baseado na orientação
+    dimensao_referencia_painel = 2.278 if orientacao == "Paisagem" else 1.134
+
     fig.add_trace(go.Scatterpolar(
-        r=[0, 1], theta=[azi, azi],
-        mode='lines+markers', name='Módulo FV (2.4m)',
-        line=dict(color='blue', width=8),
-        marker=dict(symbol='square', size=4)
+        r=[0, dimensao_referencia_painel], theta=[azi, azi],
+        mode='lines+markers', name=f'Módulo FV ({orientacao})',
+        line=dict(color='blue', width=8)
     ))
 
     # --- ELEMENTO 2: O OBSTÁCULO E SOMBRA ---

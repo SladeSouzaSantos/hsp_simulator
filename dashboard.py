@@ -84,11 +84,20 @@ with st.sidebar:
     
     if usar_obstaculo:
         h_obs = st.number_input("Altura do Obstáculo (m)", min_value=0.01, value=3.0, step=0.5, format="%.2f")
-        d_obs = st.number_input("Distância do Painel (m)", min_value=0.1, value=2.0, step=0.5, format="%.2f")
-        
+        largura_obj = st.number_input("Largura do Obstáculo (m)", min_value=0.1, value=5.0)
         # Se o obstáculo for uma parede ao lado, podemos definir o azimute dela. 
         # Por padrão, vamos sugerir o mesmo azimute do painel (parede frontal/traseira)
         azi_obs = st.number_input("Azimute do Obstáculo (°)", min_value=0, max_value=360, value=int(azi), step=5)
+               
+        col_dim1, col_dim2 = st.columns(2)
+        orientacao = col_dim1.selectbox("Orientação da Placa", ["Retrato", "Paisagem"])
+        dist_input = col_dim2.number_input("Distância (m)", value=2.0)
+
+        st.divider()
+        
+        # Lógica interna para corrigir d_obs
+        tamanho_placa = 1.139 if orientacao == "Retrato" else 2.278
+        d_obs = dist_input + tamanho_placa
         
         obstacle_config = {
             'height': h_obs,
@@ -103,7 +112,9 @@ with st.sidebar:
         mes_v = c1.selectbox("Mês de Referência", meses_lista, index=datetime.now().month - 1)
         hora_sim = c2.slider("Horário da Simulação", 8.0, 16.0, 12.0, step=0.5, format="%g h")
         
-        renderizar_grafico_sombra(meses_lista, mes_v, hora_sim, lat, h, usar_obstaculo, h_obs, d_obs, azi_obs, azi) 
+        renderizar_grafico_sombra(meses_lista, mes_v, hora_sim, lat, h, usar_obstaculo, h_obs, d_obs, azi_obs, azi, 
+                                  largura_obj, orientacao) 
     
 if st.button("Calcular e Comparar"):
-    renderizar_layout_comparativo(lat, lon, inc, azi, alb, h, tec_chave, modo_bifacial, usar_obstaculo, obstacle_config, nome_exibicao)
+    renderizar_layout_comparativo(lat, lon, inc, azi, alb, h, tec_chave, modo_bifacial, usar_obstaculo, obstacle_config, 
+                                  nome_exibicao)
