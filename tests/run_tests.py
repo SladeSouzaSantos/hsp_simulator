@@ -278,7 +278,12 @@ def run_shadow_debug_test():
             obs_config = {
                 'altura_obstaculo': caso["h_obs"],
                 'distancia_obstaculo': caso["d_obs"],
-                'referencia_azimutal_obstaculo': caso["azi_obs"]
+                'referencia_azimutal_obstaculo': caso["azi_obs"],
+                'largura_obstaculo': caso.get("w_obs", 10.0),
+                'orientacao_modulo': caso.get("orientacao", "Paisagem"),
+                # Dimensões fixas para o teste de sensibilidade
+                'altura_modulo_fv': 2.278,
+                'largura_modulo_fv': 1.134
             }
             
         res = calcular_projeto_solar(
@@ -290,12 +295,19 @@ def run_shadow_debug_test():
         )
         
         perda_str = res.get("perda_sombreamento_estimada", "0%")
+
+        # Log mais rico no console
+        w_log = caso.get("w_obs", 10.0)
+        ori_log = caso.get("orientacao", "Paisagem")
         
-        print(f"[{caso['label']}] -> Alt: {caso['h_obs']}m | Dist: {caso['d_obs']}m | Azi_Obs: {caso['azi_obs']}°")
-        print(f"   >>> Perda: {perda_str} | HSP Médio: {res['media']}\n")
+        print(f"[{caso['label']}] ({ori_log})")
+        print(f"    Obs: H={caso['h_obs']}m | L={w_log}m | D={caso['d_obs']}m | Azi={caso['azi_obs']}°")
+        print(f"    >>> Perda: {perda_str} | HSP Médio: {res['media']}\n")
         
         results.append({
             "Cenário": caso["label"],
+            "Orientação": ori_log,
+            "Largura_Obs": w_log,
             "Altura_Obs": caso["h_obs"],
             "Dist_Obs": caso["d_obs"],
             "Azi_Obs": caso["azi_obs"],

@@ -50,6 +50,11 @@ SCENARIOS = {
             {"label": "Obstáculo Alto (10.0m)", "h_obs": 10.0, "d_obs": 2.0, "azi_obs": 0},
             {"label": "Distância Longa (10m)", "h_obs": 5.0, "d_obs": 10.0, "azi_obs": 0},
             {"label": "Azimute Oposto (Sul)", "h_obs": 5.0, "d_obs": 2.0, "azi_obs": 180},
+            {"label": "Muro Leste (Manhã)", "h_obs": 3.0, "d_obs": 1.5, "azi_obs": 90},
+            {"label": "Muro Oeste (Tarde)", "h_obs": 3.0, "d_obs": 1.5, "azi_obs": 270},
+            {"label": "Objeto Estreito (Poste)", "h_obs": 8.0, "d_obs": 2.0, "azi_obs": 0, "w_obs": 0.2},
+            {"label": "Objeto Largo (Edifício)", "h_obs": 10.0, "d_obs": 5.0, "azi_obs": 0, "w_obs": 50.0},
+            {"label": "Retrato vs Paisagem (Sensibilidade)", "h_obs": 2.0, "d_obs": 1.0, "azi_obs": 0, "orientacao": "Retrato"},
         ],
         "inclinacoes": [15],
         "azimutes": [0]
