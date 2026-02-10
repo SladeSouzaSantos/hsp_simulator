@@ -2,12 +2,46 @@ import os
 import streamlit as st
 import pandas as pd
 import altair as alt
-import json # Adicionado para ler o banco local
+import json
+import plotly.graph_objects as go
+import numpy as np
+import math
+from datetime import datetime
 
 from core.app import calcular_projeto_solar
 from utils.constants import ALBEDO_REFERENCE, CELL_TECHNOLOGY_REFERENCE
 from services.nasa_gateway import NasaPowerGateway
 from services.solar_service import SolarDataService
+
+# --- FUNÇÕES DE NÚCLEO (GEOMETRIA SOLAR) ---
+
+def calcular_posicoes(lat, altura, dia_ano, hora):
+    """Calcula a física da sombra e a posição do sol (Azimute e Altitude)."""
+    # Declinação Solar (Cooper, 1969)
+    delta = 23.45 * math.sin(math.radians(360/365 * (dia_ano - 81)))
+    # Ângulo Horário (15 graus por hora)
+    h_ang = (hora - 12) * 15
+    lat_rad, delta_rad, h_rad = map(math.radians, [lat, delta, h_ang])
+    
+    # Altitude Solar (Ângulo acima do horizonte)
+    sin_alpha = (math.sin(lat_rad) * math.sin(delta_rad) + 
+                 math.cos(lat_rad) * math.cos(delta_rad) * math.cos(h_rad))
+    
+    if sin_alpha <= 0.001: 
+        return None 
+    
+    alpha_rad = math.asin(sin_alpha)
+    comprimento_sombra = altura / math.tan(alpha_rad)
+    
+    # Azimute Solar
+    arg_cos = (math.sin(delta_rad) - math.sin(lat_rad) * math.sin(alpha_rad)) / (math.cos(lat_rad) * math.cos(alpha_rad))
+    arg_cos = max(min(arg_cos, 1), -1) 
+    gamma_deg = math.degrees(math.acos(arg_cos))
+    
+    if h_ang > 0: 
+        gamma_deg = 360 - gamma_deg
+    
+    return gamma_deg, (gamma_deg + 180) % 360, comprimento_sombra, math.degrees(alpha_rad)
 
 # --- CARREGAMENTO DE LOCALIDADES ---
 @st.cache_data
@@ -87,6 +121,7 @@ with st.sidebar:
     st.subheader("🏗️ Obstruções e Sombra")
     usar_obstaculo = st.toggle("Considerar Obstáculo Próximo", value=False)
 
+    h_obs, d_obs, azi_obs = 3.0, 2.0, azi
     obstacle_config = None
     
     if usar_obstaculo:
@@ -102,6 +137,117 @@ with st.sidebar:
             'distance': d_obs,
             'azimuth': azi_obs
         }
+        
+        # VISUALIZAÇÃO DO CENÁRIO COM OBSTÁCULO
+        c1, c2 = st.columns(2)
+        meses_lista = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", 
+                    "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
+        mes_v = c1.selectbox("Mês de Referência", meses_lista, index=datetime.now().month - 1)
+        hora_sim = c2.slider("Horário da Simulação", 5.0, 19.0, 12.0, step=0.5, format="%g h")
+
+        mes_num = meses_lista.index(mes_v) + 1
+        dia_ano = datetime(2026, mes_num, 21).timetuple().tm_yday
+        
+        # Altura de referência para o cálculo do sol/sombra
+        altura_ref = h_obs if usar_obstaculo else h
+        pos_agora = calcular_posicoes(lat, altura_ref, dia_ano, hora_sim)
+
+        # --- AJUSTES DE ESCALA (Sua regra: 2x a distância) ---
+        # Se não houver obstáculo, usamos um padrão de 10m para visualização do painel
+        max_r = d_obs * 2 if usar_obstaculo else 10
+
+        fig = go.Figure()
+
+        # =================================================================
+        # INCLUSÃO DA TRAJETÓRIA DO SOL (ESTILO SHADOW_APP.PY)
+        # =================================================================
+        # Criamos o rastro na borda do gráfico (90% do raio máximo)
+        rastro_distancia = max_r * 0.9 
+        traj_theta = []
+        
+        # Fazemos a varredura do dia para desenhar o caminho
+        for hr_track in np.linspace(5.5, 18.5, 60):
+            p_track = calcular_posicoes(lat, altura_ref, dia_ano, hr_track)
+            if p_track:
+                traj_theta.append(p_track[0]) # Pega o Azimute do sol
+        
+        if traj_theta:
+            fig.add_trace(go.Scatterpolar(
+                r=[rastro_distancia] * len(traj_theta), 
+                theta=traj_theta,
+                mode='lines', 
+                name='Trajetória do Sol',
+                line=dict(color='gold', dash='dot', width=3) # Pontilhados amarelos
+            ))
+        # =================================================================
+
+        # --- ELEMENTO 1: O PAINEL (Escala Real 2.4m) ---
+        fig.add_trace(go.Scatterpolar(
+            r=[0, 1], theta=[azi, azi],
+            mode='lines+markers', name='Módulo FV (2.4m)',
+            line=dict(color='blue', width=8),
+            marker=dict(symbol='square', size=4)
+        ))
+
+        # --- ELEMENTO 2: O OBSTÁCULO E SOMBRA ---
+        dist_sombra = 0
+        if usar_obstaculo and pos_agora:
+            az_sol, az_sombra, dist_sombra, alt_sol = pos_agora
+            
+            # Sombra projetada: Começa no obstáculo
+            fig.add_trace(go.Scatterpolar(
+                r=[d_obs, d_obs + dist_sombra], 
+                theta=[azi_obs, az_sombra],
+                mode='lines', name='Sombra Projetada',
+                line=dict(color='rgba(50, 50, 50, 0.4)', width=10)
+            ))
+
+            # Marcador do Obstáculo
+            fig.add_trace(go.Scatterpolar(
+                r=[d_obs], theta=[azi_obs],
+                mode='markers+text', name='Obstáculo',
+                marker=dict(size=15, color='red', symbol='square')
+            ))
+
+        # --- ELEMENTO 3: TRAJETÓRIA DO SOL ---
+        traj_theta, traj_r = [], []
+        relatorio_dados = []
+        for hr in np.linspace(5.5, 18.5, 60):
+            p = calcular_posicoes(lat, altura_ref, dia_ano, hr)
+            if p:
+                # Para o rastro do sol, mapeamos a altitude (90-alt) para caber na escala do gráfico
+                # Mas como o gráfico agora é focado em metros, o sol é apenas referencial
+                traj_theta.append(p[0])
+                traj_r.append(p[0]) # Apenas para rastro direcional
+
+        if pos_agora:
+            # Indicador da direção do Sol (seta externa)
+            fig.add_trace(go.Scatterpolar(
+                r=[d_obs * 1.8], theta=[pos_agora[0]],
+                mode='markers', name='Direção do Sol',
+                marker=dict(size=12, color='orange', symbol='star')
+            ))
+
+        fig.update_layout(
+            polar=dict(
+                angularaxis=dict(
+                    direction="clockwise", 
+                    rotation=90, 
+                    tickvals=[0, 90, 180, 270], 
+                    ticktext=['N', 'L', 'S', 'O']
+                ),
+                radialaxis=dict(
+                    visible=True, 
+                    range=[0, max_r], 
+                    title="Metros"
+                )
+            ),
+            height=700, 
+            template="plotly_white",
+            legend=dict(orientation="h", y=-0.2)
+        )
+        
+        st.plotly_chart(fig, width='stretch') 
     
 if st.button("Calcular e Comparar"):
     # Normalizamos para o cache interno do worker
