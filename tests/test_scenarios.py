@@ -26,5 +26,18 @@ SCENARIOS = {
         "azimutes": [0, 45, 90, 135, 180],
         "alturas_teste": [0.5, 1.5],
         "albedos_teste": [0.2, 0.4, 0.7]
-    }
+    },
+    "obstaculo_parede": {
+        "descricao": "Impacto de Sombra (Parede 4m, Distância 2m)",
+        "inclinações": [15],
+        "azimutes": [0],
+        "altura": 1.5,
+        "albedo": 0.2,
+        "obstacle_config": {
+            "altura": 4.0,
+            "distancia": 2.0,
+            "az_parede": 45.0, # Nordeste
+            "largura": 10.0
+        }
+    },
 }

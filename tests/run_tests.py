@@ -27,50 +27,56 @@ def run_simulation():
     
     all_results = []
     
-    # --- PRÉ-CARREGAMENTO (FORA DOS LOOPS) ---
+    # --- PRÉ-CARREGAMENTO ---
     print(f"Buscando dados meteorológicos para {lat}, {lon}...")
     gateway = NasaPowerGateway(lat, lon)
-    # Buscamos e já padronizamos uma única vez
     dados_clima = SolarDataService.standardize_data(gateway.fetch_climatology())
 
     print(f"\nINICIANDO TESTE TÉCNICO - PLACA: {PLACA_CADASTRADA['modelo']}")
     print(f"TECNOLOGIA: {PLACA_CADASTRADA['tecnologia']} | FATOR B: {CELL_TECHNOLOGY_REFERENCE[PLACA_CADASTRADA['tecnologia']]['fator_conservador']}")
 
     for nome_chave, config in SCENARIOS.items():
-        print(f"\n{'='*85}")
+        print(f"\n{'='*105}")
         print(f" EXECUÇÃO: {config['descricao']}")
-        print(f"{'='*85}")
+        print(f"{'='*105}")
         
         alturas = config.get('alturas_teste', [config.get('altura', 1.5)])
         albedos = config.get('albedos_teste', [config.get('albedo', 0.4)])
         
-        header = f"{'ALB.':>5} | {'ALT.':>6} | {'INC.':>5} | {'AZI.':>5} | {'MONO HSP':>9} | {'BIFAC HSP':>9} | {'GANHO %':>8}"
+        # Captura a configuração de obstáculo se existir no cenário
+        obs_config = config.get('obstacle_config', None)
+        
+        header = f"{'ALB.':>5} | {'ALT.':>6} | {'INC.':>5} | {'AZI.':>5} | {'MONO HSP':>9} | {'BIFAC HSP':>9} | {'GANHO %':>8} | {'PERDA SOMBRA'}"
         print(header)
-        print("-" * 85)
+        print("-" * 105)
 
         for alb in albedos:
             for h in alturas:
                 for inc in config['inclinações']:
                     for azi in config['azimutes']:
-                        # Passamos o 'dados_pre_carregados' para o app.py não bater na NASA novamente
+                        # --- CÁLCULO MONOFACIAL ---
                         res_mono = calcular_projeto_solar(
                             lat, lon, inc, azi, alb, h, 
                             tecnologia=PLACA_CADASTRADA["tecnologia"], 
                             panel_width=dimensao_L, 
                             is_bifacial=False, 
-                            dados_pre_carregados=dados_clima
+                            dados_pre_carregados=dados_clima,
+                            obstacle_config=obs_config # NOVO PARÂMETRO
                         )
                         
+                        # --- CÁLCULO BIFACIAL ---
                         res_bi = calcular_projeto_solar(
                             lat, lon, inc, azi, alb, h, 
                             tecnologia=PLACA_CADASTRADA["tecnologia"], 
                             panel_width=dimensao_L, 
                             is_bifacial=True, 
-                            dados_pre_carregados=dados_clima
+                            dados_pre_carregados=dados_clima,
+                            obstacle_config=obs_config # NOVO PARÂMETRO
                         )
                         
                         m_val = res_mono["media"]
                         b_val = res_bi["media"]
+                        perda_sombra = res_bi.get("perda_sombreamento_estimada", "0%")
                         ganho = ((b_val / m_val) - 1) * 100 if m_val > 0 else 0
                         
                         all_results.append({
@@ -82,10 +88,11 @@ def run_simulation():
                             "azimute_deg": azi,
                             "hsp_monofacial": round(m_val, 3),
                             "hsp_bifacial": round(b_val, 3),
-                            "ganho_percentual": round(ganho, 2)
+                            "ganho_percentual": round(ganho, 2),
+                            "perda_sombra": perda_sombra
                         })
                         
-                        print(f"{alb:>5.1f} | {h:>5}m | {inc:>4}° | {azi:>4}° | {m_val:>9.3f} | {b_val:>9.3f} | {ganho:>7.1f}%")
+                        print(f"{alb:>5.1f} | {h:>5}m | {inc:>4}° | {azi:>4}° | {m_val:>9.3f} | {b_val:>9.3f} | {ganho:>7.1f}% | {perda_sombra:>12}")
         
     if all_results:
         SolarExporter.export_to_csv("SIMULACAO_HSP_BIFACIAL", all_results)

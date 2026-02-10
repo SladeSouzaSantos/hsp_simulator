@@ -4,7 +4,7 @@ from services.solar_service import SolarDataService
 from core.perez_engine import PerezEngine
 from utils.constants import CELL_TECHNOLOGY_REFERENCE
 
-def calcular_projeto_solar(lat, lon, inclinacao, azimute, albedo, altura, tecnologia="TOPCON", is_bifacial=True, panel_width=2.278, dados_pre_carregados=None, formato="dict"):
+def calcular_projeto_solar(lat, lon, inclinacao, azimute, albedo, altura, tecnologia="TOPCON", is_bifacial=True, panel_width=2.278, dados_pre_carregados=None, obstacle_config=None, formato="dict"):
     """
     Função principal para cálculo de HSP (Horas de Sol Pleno) com suporte a ganho bifacial.
     
@@ -19,6 +19,9 @@ def calcular_projeto_solar(lat, lon, inclinacao, azimute, albedo, altura, tecnol
     :param panel_width: Largura/Comprimento do painel para cálculo de View Factor.
     :param dados_pre_carregados (dict, optional): Dados meteorológicos já processados. 
             Se None, consulta a API da NASA. Útil para otimizar cálculos em lote.
+    :param obstacle_config (dict, optional): Configuração de obstáculo próximo (ex: parede).
+            Formato: {'height': float, 'distance': float, 'azimuth': float}. 
+            Se None, assume horizonte livre.
     :param formato: "dict" para retorno nativo, "json" para string formatada.
     """
     
@@ -43,7 +46,7 @@ def calcular_projeto_solar(lat, lon, inclinacao, azimute, albedo, altura, tecnol
     )
     
     # 3. Executa o cálculo
-    resultado = engine.calculate_tilt_hsp(clean_data, inclinacao, azimute)
+    resultado = engine.calculate_tilt_hsp(clean_data, inclinacao, azimute, obstacle_config=obstacle_config)
     
     # 4. Formata o retorno
     if formato == "json":
