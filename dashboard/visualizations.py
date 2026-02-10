@@ -121,7 +121,7 @@ def renderizar_layout_comparativo(lat, lon, inc, azi, alb, h, tec_chave, modo_bi
             # O .style.format força o Streamlit a mostrar 3 casas decimais em tudo
             st.table(df_table.style.format("{:.3f}"))
 
-def renderizar_grafico_sombra(meses_lista, mes_v, hora_sim, lat, h, usar_obstaculo, h_obs, d_obs, azi_obs, azi, largura_obj=4.0, orientacao="Paisagem"):
+def renderizar_grafico_sombra(meses_lista, mes_v, hora_sim, lat, h, usar_obstaculo, h_obs, d_obs, azi_obs, azi, orientacao="Paisagem"):
     mes_num = meses_lista.index(mes_v) + 1
     dia_ano = datetime(2026, mes_num, 21).timetuple().tm_yday
     

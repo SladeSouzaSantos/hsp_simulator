@@ -80,7 +80,7 @@ with st.sidebar:
     usar_obstaculo = st.toggle("Considerar Obstáculo Próximo", value=False)
 
     h_obs, d_obs, azi_obs = 3.0, 2.0, azi
-    obstacle_config = None
+    api_obstacle_config = None
     
     if usar_obstaculo:
         h_obs = st.number_input("Altura do Obstáculo (m)", min_value=0.01, value=3.0, step=0.5, format="%.2f")
@@ -98,11 +98,13 @@ with st.sidebar:
         # Lógica interna para corrigir d_obs
         tamanho_placa = 1.134 if orientacao == "Retrato" else 2.278
         d_obs = dist_input + tamanho_placa
-        
-        obstacle_config = {
-            'height': h_obs,
-            'distance': d_obs,
-            'azimuth': azi_obs
+
+        api_obstacle_config = {
+            'altura_obstaculo': h_obs,
+            'distancia_obstaculo': d_obs,
+            'referencia_azimutal_obstaculo': azi_obs,
+            'largura_obstaculo': largura_obj,
+            'orientacao_modulo': orientacao
         }
         
         # VISUALIZAÇÃO DO CENÁRIO COM OBSTÁCULO
@@ -112,9 +114,7 @@ with st.sidebar:
         mes_v = c1.selectbox("Mês de Referência", meses_lista, index=datetime.now().month - 1)
         hora_sim = c2.slider("Horário da Simulação", 8.0, 16.0, 12.0, step=0.5, format="%g h")
         
-        renderizar_grafico_sombra(meses_lista, mes_v, hora_sim, lat, h, usar_obstaculo, h_obs, d_obs, azi_obs, azi, 
-                                  largura_obj, orientacao) 
+        renderizar_grafico_sombra(meses_lista, mes_v, hora_sim, lat, h, usar_obstaculo, h_obs, d_obs, azi_obs, azi, orientacao) 
     
 if st.button("Calcular e Comparar"):
-    renderizar_layout_comparativo(lat, lon, inc, azi, alb, h, tec_chave, modo_bifacial, usar_obstaculo, obstacle_config, 
-                                  nome_exibicao)
+    renderizar_layout_comparativo(lat, lon, inc, azi, alb, h, tec_chave, modo_bifacial, usar_obstaculo, api_obstacle_config, nome_exibicao)

@@ -61,7 +61,7 @@ def run_simulation():
                             panel_width=dimensao_L, 
                             is_bifacial=False, 
                             dados_pre_carregados=dados_clima,
-                            obstacle_config=obs_config # NOVO PARÂMETRO
+                            obstacle_config=obs_config
                         )
                         
                         # --- CÁLCULO BIFACIAL ---
@@ -71,7 +71,7 @@ def run_simulation():
                             panel_width=dimensao_L, 
                             is_bifacial=True, 
                             dados_pre_carregados=dados_clima,
-                            obstacle_config=obs_config # NOVO PARÂMETRO
+                            obstacle_config=obs_config
                         )
                         
                         m_val = res_mono["media"]
@@ -276,9 +276,9 @@ def run_shadow_debug_test():
         obs_config = None
         if caso["h_obs"] > 0:
             obs_config = {
-                'height': caso["h_obs"],
-                'distance': caso["d_obs"],
-                'azimuth': caso["azi_obs"]
+                'altura_obstaculo': caso["h_obs"],
+                'distancia_obstaculo': caso["d_obs"],
+                'referencia_azimutal_obstaculo': caso["azi_obs"]
             }
             
         res = calcular_projeto_solar(
