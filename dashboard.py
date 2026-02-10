@@ -31,24 +31,34 @@ if 'cache_nasa' not in st.session_state:
 with st.sidebar:
     st.header("PARÂMETROS DO PROJETO")
     
-    st.divider()
+    st.subheader("📍 Localização")
+    # Seletor de modo de entrada
+    metodo_loc = st.radio("Método de Seleção", ["Cidade", "Coordenadas Manuais"], horizontal=True)
+
+    if metodo_loc == "Cidade":
+        # 1. Seleção de Estado
+        siglas_disponiveis = sorted(localidades.keys())
+        sigla_sel = st.selectbox("Estado", siglas_disponiveis)
+        
+        # 2. Seleção de Cidade
+        dados_estado = localidades[sigla_sel]
+        lista_cidades = sorted(dados_estado["cidades"], key=lambda x: x["nome"])
+        nomes_cidades = [c["nome"] for c in lista_cidades]
+        cidade_sel_nome = st.selectbox("Cidade", nomes_cidades)
+        
+        # Extração de Coordenadas
+        cidade_data = next(c for c in lista_cidades if c["nome"] == cidade_sel_nome)
+        lat = cidade_data["latitude"]
+        lon = cidade_data["longitude"]
+        nome_exibicao = f"{cidade_sel_nome}/{sigla_sel}"
     
-    st.subheader("Dados Geográficos")
-    
-    # 1. Seleção de Estado
-    siglas_disponiveis = sorted(localidades.keys())
-    sigla_sel = st.selectbox("Estado", siglas_disponiveis)
-    
-    # 2. Seleção de Cidade (Filtrada pelo Estado)
-    dados_estado = localidades[sigla_sel]
-    lista_cidades = sorted(dados_estado["cidades"], key=lambda x: x["nome"])
-    nomes_cidades = [c["nome"] for c in lista_cidades]
-    cidade_sel_nome = st.selectbox("Cidade", nomes_cidades)
-    
-    # 3. Extração de Coordenadas do JSON
-    cidade_data = next(c for c in lista_cidades if c["nome"] == cidade_sel_nome)
-    lat = cidade_data["latitude"]
-    lon = cidade_data["longitude"]
+    else:
+        # Entrada Manual - O segredo aqui é o step=None para remover o + e -
+        col_lat, col_lon = st.columns(2)
+        lat = col_lat.number_input("Latitude", value=-5.79448, format="%.5f", step=0.0)
+        lon = col_lon.number_input("Longitude", value=-35.21101, format="%.5f", step=0.0)
+        nome_exibicao = "Coordenadas Personalizadas"
+        sigla_sel = "Custom"
     
     st.caption(f"📍 Coordenadas: {lat}, {lon}")
     
@@ -62,7 +72,7 @@ with st.sidebar:
     
     st.subheader("Módulo FV")
     modo_bifacial = st.toggle("Ativar Ganho Bifacial", value=True)
-    h = st.number_input("Altura da Placa do chão (m)", value=0.2)
+    h = st.number_input("Altura da Placa do chão (m)", min_value=0.0, value=0.2, step=0.05)
     tec_chave = st.selectbox("Tecnologia da Célula", list(CELL_TECHNOLOGY_REFERENCE.keys()))
     st.caption(f"Tipo: {CELL_TECHNOLOGY_REFERENCE[tec_chave]['nome_comum']}")
     
@@ -71,6 +81,27 @@ with st.sidebar:
     st.subheader("Condições do Solo")
     tipo_solo = st.selectbox("Tipo de Solo", list(ALBEDO_REFERENCE.keys()))
     alb = st.slider("Albedo Ajustado", 0.0, 1.0, float(ALBEDO_REFERENCE[tipo_solo]))
+
+    st.divider()
+
+    st.subheader("🏗️ Obstruções e Sombra")
+    usar_obstaculo = st.toggle("Considerar Obstáculo Próximo", value=False)
+
+    obstacle_config = None
+    
+    if usar_obstaculo:
+        h_obs = st.number_input("Altura do Obstáculo (m)", min_value=0.01, value=3.0, step=0.5, format="%.2f")
+        d_obs = st.number_input("Distância do Painel (m)", min_value=0.1, value=2.0, step=0.5, format="%.2f")
+        
+        # Se o obstáculo for uma parede ao lado, podemos definir o azimute dela. 
+        # Por padrão, vamos sugerir o mesmo azimute do painel (parede frontal/traseira)
+        azi_obs = st.number_input("Azimute do Obstáculo (°)", min_value=0, max_value=360, value=int(azi), step=5)
+        
+        obstacle_config = {
+            'height': h_obs,
+            'distance': d_obs,
+            'azimuth': azi_obs
+        }
     
 if st.button("Calcular e Comparar"):
     # Normalizamos para o cache interno do worker
@@ -95,7 +126,8 @@ if st.button("Calcular e Comparar"):
             lat=lat, lon=lon, inclinacao=inc, azimute=azi, 
             albedo=alb, altura=h, tecnologia=tec_chave, 
             is_bifacial=modo_bifacial, panel_width=2.278,
-            dados_pre_carregados=dados_clima
+            dados_pre_carregados=dados_clima,
+            obstacle_config=obstacle_config
         )
         
         # Cenário B: Padrão (Inclinação 0, Azimute 0)
@@ -103,13 +135,14 @@ if st.button("Calcular e Comparar"):
             lat=lat, lon=lon, inclinacao=0, azimute=0, 
             albedo=alb, altura=h, tecnologia=tec_chave, 
             is_bifacial=modo_bifacial, panel_width=2.278,
-            dados_pre_carregados=dados_clima
+            dados_pre_carregados=dados_clima,
+            obstacle_config=None
         )
         
         # --- EXIBIÇÃO DE MÉTRICAS E GRÁFICOS ---
         # (O resto do seu código de métricas e Altair permanece igual daqui para baixo)
         label_tipo = "Bifacial" if modo_bifacial else "Monofacial"
-        st.subheader(f"Resultados Médios Diários ({label_tipo}) - {cidade_sel_nome}/{sigla_sel}")
+        st.subheader(f"Resultados Médios Diários ({label_tipo}) - {nome_exibicao}")
         
         col1, col2, col3 = st.columns(3)
         ganho_vs_padrao = ((res_projeto['media'] / res_padrao['media']) - 1) * 100
@@ -117,6 +150,12 @@ if st.button("Calcular e Comparar"):
         col1.metric("HSP Projeto", f"{res_projeto['media']:.3f}", f"{ganho_vs_padrao:.1f}% vs. 0°/0°")
         col2.metric("HSP Padrão (0°/0°)", f"{res_padrao['media']:.3f}")
         col3.metric("Diferença Bruta", f"{res_projeto['media'] - res_padrao['media']:.3f} kWh/m²")
+
+        perda_str = res_projeto.get("perda_sombreamento_estimada", "0%")
+        
+        # Verificamos se há obstáculo e se a perda não é zero
+        if usar_obstaculo and perda_str not in ["0%", "0.0%"]:
+            st.error(f"🚨 **Perda por Sombreamento:** {perda_str}")
 
         meses = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
         df_projeto = pd.DataFrame({"Mês": meses, "HSP": res_projeto["mensal"], "Cenário": "Seu Projeto"})
@@ -134,12 +173,15 @@ if st.button("Calcular e Comparar"):
             title=f"Comparativo Mensal: Projeto vs. Referência Plana ({label_tipo})"
         )
 
-        st.altair_chart(grafico, width="stretch")
+        st.altair_chart(grafico, width='stretch')
 
         with st.expander("Ver Tabela Comparativa Detalhada"):
+            # Criamos o dataframe garantindo que os dados venham das variáveis de resultado
             df_table = pd.DataFrame({
                 "Mês": meses,
                 "Seu Projeto": res_projeto["mensal"],
                 "Padrão (0°/0°)": res_padrao["mensal"]
             }).set_index("Mês").T
+            
+            # O .style.format força o Streamlit a mostrar 3 casas decimais em tudo
             st.table(df_table.style.format("{:.3f}"))
