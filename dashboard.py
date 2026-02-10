@@ -96,7 +96,7 @@ with st.sidebar:
         st.divider()
         
         # Lógica interna para corrigir d_obs
-        tamanho_placa = 1.139 if orientacao == "Retrato" else 2.278
+        tamanho_placa = 1.134 if orientacao == "Retrato" else 2.278
         d_obs = dist_input + tamanho_placa
         
         obstacle_config = {

@@ -159,14 +159,22 @@ def renderizar_grafico_sombra(meses_lista, mes_v, hora_sim, lat, h, usar_obstacu
     # =================================================================
 
     # --- ELEMENTO 1: O PAINEL (Escala Real 2.278m) ---
-    # 1. Ajuste do Raio do Painel baseado na orientação
+    # 1. Ajuste do Tamanho do Painel baseado na orientação
     dimensao_referencia_painel = 2.278 if orientacao == "Paisagem" else 1.134
 
     fig.add_trace(go.Scatterpolar(
-        r=[0, dimensao_referencia_painel], theta=[azi, azi],
-        mode='lines+markers', name=f'Módulo FV ({orientacao})',
-        line=dict(color='blue', width=8)
-    ))
+    r=[0, dimensao_referencia_painel], 
+    theta=[azi, azi],
+    mode='lines+markers', 
+    name=f'Módulo FV ({orientacao})',
+    line=dict(color='blue', width=2),
+    marker=dict(
+        symbol='arrow',         # Define o símbolo como seta
+        size=15,                # Ajuste o tamanho da ponta da seta aqui
+        angleref='previous',    # Faz a seta girar automaticamente para o ângulo do azimute
+        color='blue'
+    )
+))
 
     # --- ELEMENTO 2: O OBSTÁCULO E SOMBRA ---
     dist_sombra = 0
