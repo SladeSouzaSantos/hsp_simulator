@@ -52,7 +52,7 @@ def run_simulation():
 
         for alb in albedos:
             for h in alturas:
-                for inc in config['inclinações']:
+                for inc in config['inclinacoes']:
                     for azi in config['azimutes']:
                         # --- CÁLCULO MONOFACIAL ---
                         res_mono = calcular_projeto_solar(
@@ -257,6 +257,57 @@ def run_transposition_test():
         print("="*100)
         print("✅ Teste de transposição concluído e salvo em 'data/'.")
 
+def run_shadow_debug_test():
+    print("\n" + "="*50)
+    print("🔍 TESTE DE SENSIBILIDADE DE SOMBRA")
+    print("="*50)
+    
+    config = SCENARIOS["validacao_sombra"]
+    lat, lon = config["lat"], config["lon"]
+    
+    # Pré-carregamento dos dados para ser rápido
+    gateway = NasaPowerGateway(lat, lon)
+    dados_clima = SolarDataService.standardize_data(gateway.fetch_climatology())
+    
+    results = []
+    
+    for caso in config["casos"]:
+        # Monta a config de obstáculo (ou None se h=0)
+        obs_config = None
+        if caso["h_obs"] > 0:
+            obs_config = {
+                'height': caso["h_obs"],
+                'distance': caso["d_obs"],
+                'azimuth': caso["azi_obs"]
+            }
+            
+        res = calcular_projeto_solar(
+            lat=lat, lon=lon, inclinacao=config["inclinacoes"], azimute=config["azimutes"],
+            albedo=0.2, altura=0.2, tecnologia="TOPCON",
+            is_bifacial=True, panel_width=2.278,
+            dados_pre_carregados=dados_clima,
+            obstacle_config=obs_config
+        )
+        
+        perda_str = res.get("perda_sombreamento_estimada", "0%")
+        
+        print(f"[{caso['label']}] -> Alt: {caso['h_obs']}m | Dist: {caso['d_obs']}m | Azi_Obs: {caso['azi_obs']}°")
+        print(f"   >>> Perda: {perda_str} | HSP Médio: {res['media']}\n")
+        
+        results.append({
+            "Cenário": caso["label"],
+            "Altura_Obs": caso["h_obs"],
+            "Dist_Obs": caso["d_obs"],
+            "Azi_Obs": caso["azi_obs"],
+            "Perda_%": perda_str,
+            "HSP_Final": res["media"]
+        })
+
+    # Opcional: Salvar em CSV para análise
+    df = pd.DataFrame(results)
+    df.to_csv("data/DEBUG_SOMBRA.csv", index=False)
+    print("✅ Debug de sombra concluído e salvo em 'data/DEBUG_SOMBRA.csv'.")
+
 if __name__ == "__main__":
     while True:
         print("\n" + "="*50)
@@ -265,7 +316,8 @@ if __name__ == "__main__":
         print(" [1] Simulação Técnica (Cenários/Bifacial)")
         print(" [2] Comparativo de Fontes (SunData vs NASA)")
         print(" [3] Teste de Transposição Pura (Lógica da API)")
-        print(" [4] Executar Todos os Testes")
+        print(" [4] Debug de Sombra (Teste de Sensibilidade)")
+        print(" [5] Executar Todos os Testes")
         print(" [0] Sair")
         print("="*50)
         
@@ -278,10 +330,13 @@ if __name__ == "__main__":
         elif escolha == "3":
             run_transposition_test()
         elif escolha == "4":
+            run_shadow_debug_test()
+        elif escolha == "5":
             print("\n🚀 Iniciando bateria completa de testes...")
             run_simulation()
             run_deep_validation()
             run_transposition_test()
+            run_shadow_debug_test()
             print("\n✅ Todos os relatórios foram gerados na pasta 'data/'.")
         elif escolha == "0":
             print("\nEncerrando... Até logo!")
