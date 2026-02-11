@@ -1,9 +1,7 @@
 from fastapi import FastAPI, Body
-from pydantic import BaseModel, Field
-from typing import Optional, List
-
 from services.nasa_gateway import NasaPowerGateway
 from services.solar_service import SolarDataService
+from schemas.schemas import ProjetoSolarRequest, ProjetoSolarResponse, ProjetoArranjoRequest, ArranjoSolarResponse
 from core.app import calcular_projeto_solar
 
 app = FastAPI(
@@ -13,87 +11,7 @@ app = FastAPI(
     root_path="/api"
 )
 
-# --- MODELOS DE RESPOSTA (Para documentação no Swagger) ---
-class ProjetoSolarResponse(BaseModel):
-    media: float = Field(..., title="Média HSP", description="Média anual de Horas de Sol Pleno")
-    mensal: List[float] = Field(..., title="HSP Mensal", description="Lista com os 12 valores mensais de HSP")
-    perda_sombreamento_estimada: str = Field(..., title="Perda de Sombra", description="Percentual estimado de perda por obstrução")
 
-class ItemArranjoResponse(BaseModel):
-    id_placa: str = Field(..., title="ID")
-    hsp_media: float = Field(..., title="HSP Médio")
-    perda_sombra: str = Field(..., title="Perda de Sombra (%)")
-
-class ArranjoSolarResponse(BaseModel):
-    total_placas: int = Field(..., title="Total de Itens")
-    resultados: List[ItemArranjoResponse]
-
-# --- MODELOS DE ENTRADA ---
-class ConfigObstaculo(BaseModel):
-    altura_obstaculo: float = Field(
-        ..., title="Altura do Obstáculo", description="Altura total do objeto em metros"
-    )
-    distancia_obstaculo: float = Field(
-        ..., title="Distância do Obstáculo", description="Vão livre horizontal até a borda do painel (m)"
-    )
-    referencia_azimutal_obstaculo: float = Field(
-        ..., title="Azimute do Obstáculo", description="Direção central do objeto (0=N, 180=S)"
-    )
-    largura_obstaculo: float = Field(
-        10.0, title="Largura do Obstáculo", description="Extensão lateral da face do objeto (m)"
-    )
-
-class ItemArranjoRequest(BaseModel):
-    id_placa: str = Field(..., title="Identificador", example="Modulo_01")
-    distancia_obstaculo: float = Field(..., title="Distância do Objeto (m)", example=2.5)
-
-class ProjetoSolarRequest(BaseModel):
-    latitude: float = Field(..., title="Latitude", json_schema_extra={"example": -7.562})
-    longitude: float = Field(..., title="Longitude", json_schema_extra={"example": -37.688})
-    inclinacao_graus: int = Field(
-        15, title="Inclinação", description="Ângulo de inclinação do painel (0 a 90°)"
-    )
-    azimute_graus: int = Field(
-        0, title="Azimute", description="Orientação do painel (0=Norte, 180=Sul)"
-    )
-    albedo_solo: float = Field(
-        0.2, title="Albedo", description="Fator de reflexão do solo (ex: 0.2 para grama)"
-    )
-    distancia_centro_modulo_chao: float = Field(
-        0.15, title="Altura de Instalação", description="Altura do centro do módulo até o solo (m)"
-    )
-    tecnologia_celula: str = Field(
-        "TOPCON", title="Tecnologia", description="Tipo de célula (TOPCON, PERC, AL BSF)"
-    )
-    is_bifacial: bool = Field(
-        True, title="Bifacialidade", description="Habilitar cálculo de face traseira"
-    )
-    comprimento_modulo: float = Field(
-        2.278, title="Comprimento", description="Lado maior do painel em metros"
-    )
-    largura_modulo: float = Field(
-        1.134, title="Largura", description="Lado menor do painel em metros"
-    )
-    orientacao: str = Field(
-        "Retrato", title="Orientação", description="Posicionamento: 'Retrato' ou 'Paisagem'"
-    )
-    config_obstaculo: Optional[ConfigObstaculo] = Field(
-        None, title="Configuração de Sombra", description="Dicionário com dados do obstáculo"
-    )
-
-class ProjetoArranjoRequest(BaseModel):
-    latitude: float = Field(..., example=-7.562)
-    longitude: float = Field(..., example=-37.688)
-    inclinacao_graus: int = Field(15)
-    azimute_graus: int = Field(0)
-    tecnologia_celula: str = Field("TOPCON")
-    # Dados comuns do obstáculo fixo (exceto a distância que varia por item)
-    altura_obstaculo: float = Field(..., description="Altura do muro/prédio")
-    referencia_azimutal_obstaculo: float = Field(..., description="Azimute do objeto")
-    # Lista de placas/fileiras para analisar
-    itens: List[ItemArranjoRequest]
-
-# --- ENDPOINTS ---
 
 @app.post("/calcular", response_model=ProjetoSolarResponse, summary="Calcula HSP Corrigido",
     description="Calcula a média de HSP considerando inclinação, azimute, ganho bifacial e sombras."
@@ -151,7 +69,7 @@ def post_hsp(
         config_sombra = dados.config_obstaculo.model_dump()
 
     # Chamada do core
-    return calcular_projeto_solar(
+    res = calcular_projeto_solar(
         lat=dados.latitude, 
         lon=dados.longitude, 
         inclinacao=dados.inclinacao_graus, 
@@ -167,25 +85,185 @@ def post_hsp(
         formato="dict"
     )
 
+    return {
+        "kWh/m²/dia": {
+            "real": {
+                "media": res["media"],
+                "mensal": res["mensal"],
+            },
+            "referencia": {
+                "media_sem_sombra": res["media_sem_sombra"],
+                "mensal_sem_sombra": res["mensal_sem_sombra"],
+            }
+        },
+        "perda_sombreamento_estimada": res["perda_sombreamento_estimada"]
+    }
+
 @app.post("/calcular-arranjo", response_model=ArranjoSolarResponse, summary="Cálculo em Lote (Com Cache)")
 def post_arranjo(
     dados: ProjetoArranjoRequest = Body(
         ...,
         openapi_examples={
-            "Arranjo de 3 Fileiras": {
-                "summary": "Estudo de 3 fileiras com distâncias diferentes",
+            "Arranjo Complexo": {
+                "summary": "Múltiplas placas com configurações distintas",
                 "value": {
-                    "latitude": -7.562,
-                    "longitude": -37.688,
-                    "inclinacao_graus": 15,
-                    "azimute_graus": 0,
-                    "tecnologia_celula": "TOPCON",
-                    "altura_obstaculo": 3.5,
-                    "referencia_azimutal_obstaculo": 0,
+                    "latitude": -5.8125,
+                    "longitude": -35.1875,
                     "itens": [
-                        {"id_placa": "Fileira_01", "distancia_obstaculo": 2.0},
-                        {"id_placa": "Fileira_02", "distancia_obstaculo": 4.5},
-                        {"id_placa": "Fileira_03", "distancia_obstaculo": 7.0}
+                        {
+                            "id_placa": "Fileira_Norte_01",
+                            "inclinacao_graus": 15,
+                            "azimute_graus": 0,
+                            "albedo_solo": 0.2,
+                            "distancia_centro_modulo_chao": 0.5,
+                            "tecnologia_celula": "TOPCON",
+                            "is_bifacial": True,
+                            "config_obstaculo": {
+                                "altura_obstaculo": 4.0,
+                                "distancia_obstaculo": 2.0,
+                                "referencia_azimutal_obstaculo": 180.0,
+                                "largura_obstaculo": 10.0
+                            }
+                        },
+                        {
+                            "id_placa": "Fileira_Central",
+                            "inclinacao_graus": 20,
+                            "azimute_graus": 90,
+                            "albedo_solo": 0.5,
+                            "distancia_centro_modulo_chao": 0.2,
+                            "tecnologia_celula": "PERC",
+                            "is_bifacial": True,
+                            "config_obstaculo": None
+                        },
+                        {
+                            "id_placa": "Fileira_Sul_01",
+                            "inclinacao_graus": 15,
+                            "azimute_graus": 180,
+                            "albedo_solo": 0.2,
+                            "distancia_centro_modulo_chao": 0.5,
+                            "tecnologia_celula": "TOPCON",
+                            "is_bifacial": True,
+                            "config_obstaculo": {
+                                "altura_obstaculo": 4.0,
+                                "distancia_obstaculo": 2.0,
+                                "referencia_azimutal_obstaculo": 0.0,
+                                "largura_obstaculo": 10.0
+                            }
+                        },
+                    ]
+                }
+            },
+            "Arranjo Enfileirada Complexo": {
+                "summary": "Múltiplas placas enfileiradas (Obstáculo único de 4m)",
+                "value": {
+                    "latitude": -5.8125,
+                    "longitude": -35.1875,
+                    "itens": [
+                        {
+                            "id_placa": "Placa_01_Esq_Fora",
+                            "inclinacao_graus": 15,
+                            "azimute_graus": 0,
+                            "albedo_solo": 0.2,
+                            "distancia_centro_modulo_chao": 0.5,
+                            "tecnologia_celula": "TOPCON",
+                            "is_bifacial": True,
+                            "config_obstaculo": {
+                                "altura_obstaculo": 4.0,
+                                "distancia_obstaculo": 2.45,
+                                "referencia_azimutal_obstaculo": 345.0,
+                                "largura_obstaculo": 4.0
+                            }
+                        },
+                        {
+                            "id_placa": "Placa_02_Centro_Esq",
+                            "inclinacao_graus": 15,
+                            "azimute_graus": 0,
+                            "albedo_solo": 0.2,
+                            "distancia_centro_modulo_chao": 0.5,
+                            "tecnologia_celula": "TOPCON",
+                            "is_bifacial": True,
+                            "config_obstaculo": {
+                                "altura_obstaculo": 4.0,
+                                "distancia_obstaculo": 2.0,
+                                "referencia_azimutal_obstaculo": 0.0,
+                                "largura_obstaculo": 4.0
+                            }
+                        },
+                        {
+                            "id_placa": "Placa_03_Centro_Meio",
+                            "inclinacao_graus": 15,
+                            "azimute_graus": 0,
+                            "albedo_solo": 0.2,
+                            "distancia_centro_modulo_chao": 0.5,
+                            "tecnologia_celula": "TOPCON",
+                            "is_bifacial": True,
+                            "config_obstaculo": {
+                                "altura_obstaculo": 4.0,
+                                "distancia_obstaculo": 2.0,
+                                "referencia_azimutal_obstaculo": 0.0,
+                                "largura_obstaculo": 4.0
+                            }
+                        },
+                        {
+                            "id_placa": "Placa_04_Centro_Ref",
+                            "inclinacao_graus": 15,
+                            "azimute_graus": 0,
+                            "albedo_solo": 0.2,
+                            "distancia_centro_modulo_chao": 0.5,
+                            "tecnologia_celula": "TOPCON",
+                            "is_bifacial": True,
+                            "config_obstaculo": {
+                                "altura_obstaculo": 4.0,
+                                "distancia_obstaculo": 2.0,
+                                "referencia_azimutal_obstaculo": 0.0,
+                                "largura_obstaculo": 4.0
+                            }
+                        },
+                        {
+                            "id_placa": "Placa_05_Dir_Quina",
+                            "inclinacao_graus": 15,
+                            "azimute_graus": 0,
+                            "albedo_solo": 0.2,
+                            "distancia_centro_modulo_chao": 0.5,
+                            "tecnologia_celula": "TOPCON",
+                            "is_bifacial": True,
+                            "config_obstaculo": {
+                                "altura_obstaculo": 4.0,
+                                "distancia_obstaculo": 2.42,
+                                "referencia_azimutal_obstaculo": 12.8,
+                                "largura_obstaculo": 4.0
+                            }
+                        },
+                        {
+                            "id_placa": "Placa_06_Dir_Longe",
+                            "inclinacao_graus": 15,
+                            "azimute_graus": 0,
+                            "albedo_solo": 0.2,
+                            "distancia_centro_modulo_chao": 0.5,
+                            "tecnologia_celula": "TOPCON",
+                            "is_bifacial": True,
+                            "config_obstaculo": {
+                                "altura_obstaculo": 4.0,
+                                "distancia_obstaculo": 3.48,
+                                "referencia_azimutal_obstaculo": 26.5,
+                                "largura_obstaculo": 4.0
+                            }
+                        },
+                        {
+                            "id_placa": "Placa_12_Dir_Extrema",
+                            "inclinacao_graus": 15,
+                            "azimute_graus": 0,
+                            "albedo_solo": 0.2,
+                            "distancia_centro_modulo_chao": 0.5,
+                            "tecnologia_celula": "TOPCON",
+                            "is_bifacial": True,
+                            "config_obstaculo": {
+                                "altura_obstaculo": 4.0,
+                                "distancia_obstaculo": 11.12,
+                                "referencia_azimutal_obstaculo": 65.5,
+                                "largura_obstaculo": 4.0
+                            }
+                        }
                     ]
                 }
             }
@@ -194,43 +272,52 @@ def post_arranjo(
 ):
     """
     Analisa múltiplas placas/fileiras para a mesma coordenada.
-    Faz apenas UMA chamada à API da NASA para todo o lote.
+    Mantém a otimização de UMA chamada à API da NASA para todo o lote.
     """
-    # 1. Busca e processa os dados da NASA apenas UMA VEZ para o lote
+    # 1. Busca e processa os dados da NASA apenas UMA VEZ para a coordenada global
     gateway = NasaPowerGateway(dados.latitude, dados.longitude)
     raw_data = gateway.fetch_climatology()
     dados_limpos = SolarDataService.standardize_data(raw_data)
 
     resultados_finais = []
 
-    # 2. Processa cada item do arranjo usando os dados em cache (dados_limpos)
+    # 2. Processa cada item usando sua própria configuração individual
     for item in dados.itens:
-        # Monta a config de sombra específica para este item (variando a distância)
-        config_sombra = {
-            "altura_obstaculo": dados.altura_obstaculo,
-            "distancia_obstaculo": item.distancia_obstaculo,
-            "referencia_azimutal_obstaculo": dados.referencia_azimutal_obstaculo,
-            "largura_obstaculo": 15.0 # Largura generosa padrão
-        }
+        # Extrai a config de sombra se existir e for válida
+        config_sombra = None
+        if item.config_obstaculo and item.config_obstaculo.altura_obstaculo > 0:
+            config_sombra = item.config_obstaculo.model_dump()
 
-        # Chama o core injetando os dados_pre_carregados
+        # Chama o core injetando os dados_pre_carregados e as configs do item
         res = calcular_projeto_solar(
             lat=dados.latitude,
             lon=dados.longitude,
-            inclinacao=dados.inclinacao_graus,
-            azimute=dados.azimute_graus,
-            albedo=0.2,
-            altura_instalacao=1.5,
-            tecnologia=dados.tecnologia_celula,
-            is_bifacial=True,
-            dados_pre_carregados=dados_limpos,
+            inclinacao=item.inclinacao_graus,
+            azimute=item.azimute_graus,
+            albedo=item.albedo_solo,
+            altura_instalacao=item.distancia_centro_modulo_chao,
+            tecnologia=item.tecnologia_celula,
+            is_bifacial=item.is_bifacial,
+            comprimento_modulo=item.comprimento_modulo,
+            largura_modulo=item.largura_modulo,
+            orientacao=item.orientacao,
+            dados_pre_carregados=dados_limpos, # Otimização aqui
             config_obstaculo=config_sombra
         )
 
         resultados_finais.append({
             "id_placa": item.id_placa,
-            "hsp_media": res["media"],
-            "perda_sombra": res["perda_sombreamento_estimada"]
+            "kWh/m²/dia": {
+                "real": {
+                    "media": res["media"],
+                    "mensal": res["mensal"],
+                },
+                "referencia": {
+                    "media_sem_sombra": res["media_sem_sombra"],
+                    "mensal_sem_sombra": res["mensal_sem_sombra"],
+                }
+            },
+            "perda_sombreamento_estimada": res["perda_sombreamento_estimada"]
         })
 
     return {

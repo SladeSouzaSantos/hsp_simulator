@@ -2,8 +2,6 @@
 
 Este projeto é um simulador de **Horas de Sol Pleno (HSP)** projetado para cálculos de alta precisão em sistemas fotovoltaicos monofaciais e bifaciais. O motor de cálculo utiliza o **Modelo de Irradiância de Perez**, permitindo analisar o impacto da inclinação, azimute, albedo e altura de instalação no desempenho dos módulos.
 
-
-
 ## 🛠️ Funcionalidades Principais
 - **Motor de Irradiância:** Implementação do modelo de Perez para decomposição de irradiância global e difusa.
 - **Ganho Bifacial:** Cálculo técnico considerando o fator de visão (View Factor) e reflexão do solo (Albedo).
@@ -14,29 +12,57 @@ Este projeto é um simulador de **Horas de Sol Pleno (HSP)** projetado para cál
 
 ## 🔌 Documentação da API (POST `/calcular`)
 
-A API aceita requisições via método **POST** com o corpo em formato JSON.
+A API utiliza **Pydantic V2** para garantir tipagem rigorosa e utiliza *aliases* para fornecer nomes técnicos padronizados no JSON de saída.
 
-### Parâmetros de Entrada (Request Body)
+### Principais Endpoints
+* `POST /calcular`: Cálculo detalhado para um único cenário.
+* `POST /calcular-arranjo`: Processamento em lote para múltiplos módulos, otimizando as chamadas de dados climatológicos da NASA.
+
+### 1. POST `/calcular`
+Ideal para simulações rápidas de um único cenário técnico.
+
+**Parâmetros de Entrada:**
 | Campo | Tipo | Descrição |
 | :--- | :--- | :--- |
-| `latitude` | float | Latitude da usina (ex: -7.562) |
-| `longitude` | float | Longitude da usina (ex: -37.688) |
-| `inclinacao_graus` | int | Ângulo de inclinação do painel |
-| `azimute_graus` | int | Orientação (0=Norte, 180=Sul) |
-| `albedo_solo` | float | Fator de reflexão do solo (ex: 0.2) |
-| `distancia_centro_modulo_chao` | float | Altura do centro da placa até o solo (m) |
-| `tecnologia_celula` | string | Tecnologia (TOPCON, PERC, etc) |
+| `latitude` | float | Latitude (ex: -7.562) |
+| `longitude` | float | Longitude (ex: -37.688) |
+| `inclinacao_graus` | int | Ângulo de inclinação (0 a 90°) |
+| `azimute_graus` | int | Orientação (0=N, 180=S) |
+| `albedo_solo` | float | Refletividade do solo (ex: 0.2) |
+| `distancia_centro_modulo_chao` | float | Altura de instalação (m) |
+| `tecnologia_celula` | string | TOPCON, PERC, AL BSF |
+| `is_bifacial` | bool | Ativar face traseira (Default: true) |
 
-### Exemplo de Saída (Response Body)
-A resposta retorna a média anual e uma lista (`mensal`) contendo os valores de HSP de **Janeiro a Dezembro**, nesta ordem:
+---
+
+### 2. POST `/calcular-arranjo`
+Projetado para processar múltiplas placas (strings ou arranjos complexos) em uma única chamada, otimizando o consumo de dados da NASA.
+
+**Parâmetros de Entrada:**
+| Campo | Tipo | Descrição |
+| :--- | :--- | :--- |
+| `latitude` | float | Latitude comum ao arranjo |
+| `longitude` | float | Longitude comum ao arranjo |
+| `itens` | list[dict] | Lista de objetos contendo `id_placa` e suas configurações técnicas individuais (inclinação, azimute, obstáculos, etc) |
+
+---
+
+### 📊 Exemplo de Resposta Padronizada
+Ambos os endpoints retornam os dados seguindo a estrutura de comparação entre o cenário real (com perdas) e o potencial teórico (sem sombras):
 
 ```json
 {
-  "media": 6.205,
-  "mensal": [
-    5.876, 6.126, 6.362, 6.271, 5.840, 5.578, 
-    5.800, 6.505, 6.921, 6.741, 6.455, 5.991
-  ]
+  "kWh/m²/dia": {
+    "real": {
+      "media": 5.882,
+      "mensal": [5.55, 5.84, 5.99, 5.69, 5.67, 5.10, 5.51, 6.31, 6.57, 6.43, 6.17, 5.72]
+    },
+    "referencia": {
+      "media_sem_sombra": 5.942,
+      "mensal_sem_sombra": [5.62, 5.84, 5.99, 5.76, 5.79, 5.36, 5.62, 6.31, 6.57, 6.43, 6.17, 5.79]
+    }
+  },
+  "perda_sombreamento_estimada": "1.6%"
 }
 ```
 
@@ -44,11 +70,15 @@ A resposta retorna a média anual e uma lista (`mensal`) contendo os valores de 
 > Os valores da lista `mensal` representam o HSP ($kWh/m²/dia$) para cada mês do ano, facilitando a plotagem de gráficos ou cálculos de geração mensal.
 
 ## 📂 Estrutura do Repositório
-- `core/`: O "cérebro" do projeto (Engines e lógica principal).
-- `services/`: Gateways de comunicação com APIs externas.
-- `utils/`: Constantes técnicas e ferramentas de exportação.
-- `api.py`: Porta de entrada para requisições via API.
-- `dashboard.py`: Interface visual interativa.
+O projeto segue uma arquitetura modular focada em separação de responsabilidades:
+
+- **`core/`**: O motor de cálculo. Contém o `perez_engine.py` (física da irradiância) e o `shadow_engine.py` (geometria de sombras).
+- **`services/`**: Gateways de comunicação com a NASA POWER e padronização de dados.
+- **`schemas/`**: Contratos de dados (Pydantic Models) que garantem a integridade da API.
+- **`data/`**: Base de dados JSON para validação e testes comparativos.
+- **`utils/`**: Constantes técnicas (tecnologias de células) e ferramentas de exportação.
+- **`api.py`**: Ponto de entrada FastAPI.
+- **`dashboard.py`**: Interface visual interativa em Streamlit.
 
 ## ⚖️ Validação e Rigor Técnico
 
@@ -88,8 +118,8 @@ A tabela abaixo compara o HSP base (inclinação 0°) do SunData com a previsão
 O projeto inclui um painel interativo para validar novas implementações ou verificar a precisão em diferentes localidades.
 
 1. Certifique-se de que os arquivos `localidades.json` e `amostragem_sundata.json` estão na pasta `data/`.
-2. Execute o painel de testes:
 
+2. Execute o painel de testes:
 ```bash
 python -m tests.run_tests
 ```
@@ -98,7 +128,8 @@ python -m tests.run_tests
 * **[1] Simulação Técnica:** Gera cenários complexos (Muro solar, variação de altura e albedo) para testar o comportamento bifacial.
 * **[2] Comparativo de Fontes:** Compara diretamente os dados brutos da NASA POWER com o SunData (CRESESB).
 * **[3] Teste de Transposição Pura:** O teste mais rigoroso; valida se a física de inclinação da API é idêntica à dos softwares de referência.
-* **[4] Executar Tudo:** Gera relatórios detalhados em `.csv` na pasta `data/` para análise profunda.
+* **[4] Debug de Sombra:** Simula obstruções (Edifícios, Muros, Postes) em diferentes azimutes para medir a sensibilidade da perda.
+* **[5] Executar Tudo:** Gera relatórios detalhados em `.csv` na pasta `data/` para análise profunda.
 
 ## 🚀 Como começar
 
@@ -106,8 +137,8 @@ python -m tests.run_tests
 ```bash
 pip install -r requirements.txt
 ```
-2
-. Execute o Dashboard:
+
+2. Execute o Dashboard:
 ```bash
 streamlit run dashboard.py
 ```
