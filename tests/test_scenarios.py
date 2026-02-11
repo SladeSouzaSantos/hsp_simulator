@@ -33,11 +33,11 @@ SCENARIOS = {
         "azimutes": [0],
         "altura": 1.5,
         "albedo": 0.2,
-        "obstacle_config": {
-            "altura": 4.0,
-            "distancia": 2.0,
-            "az_parede": 45.0, # Nordeste
-            "largura": 10.0
+        "config_obstaculo": {
+            "altura_obstaculo": 4.0,
+            "distancia_obstaculo": 2.0,
+            "referencia_azimutal_obstaculo": 45.0,
+            "largura_obstaculo": 10.0
         }
     },
     "validacao_sombra": {

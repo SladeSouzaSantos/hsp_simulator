@@ -44,7 +44,7 @@ def run_simulation():
         albedos = config.get('albedos_teste', [config.get('albedo', 0.4)])
         
         # Captura a configuração de obstáculo se existir no cenário
-        obs_config = config.get('obstacle_config', None)
+        obs_config = config.get('config_obstaculo', None)
         
         header = f"{'ALB.':>5} | {'ALT.':>6} | {'INC.':>5} | {'AZI.':>5} | {'MONO HSP':>9} | {'BIFAC HSP':>9} | {'GANHO %':>8} | {'PERDA SOMBRA'}"
         print(header)
@@ -58,18 +58,22 @@ def run_simulation():
                         res_mono = calcular_projeto_solar(
                             lat, lon, inc, azi, alb, h, 
                             tecnologia=PLACA_CADASTRADA["tecnologia"], 
-                            comprimento_modulo=dimensao_L, 
                             is_bifacial=False, 
+                            comprimento_modulo=PLACA_CADASTRADA["comprimento"],
+                            largura_modulo=PLACA_CADASTRADA["largura"],
+                            orientacao=PLACA_CADASTRADA["orientacao"],
                             dados_pre_carregados=dados_clima,
                             config_obstaculo=obs_config
                         )
-                        
+
                         # --- CÁLCULO BIFACIAL ---
                         res_bi = calcular_projeto_solar(
                             lat, lon, inc, azi, alb, h, 
                             tecnologia=PLACA_CADASTRADA["tecnologia"], 
-                            comprimento_modulo=dimensao_L, 
                             is_bifacial=True, 
+                            comprimento_modulo=PLACA_CADASTRADA["comprimento"],
+                            largura_modulo=PLACA_CADASTRADA["largura"],
+                            orientacao=PLACA_CADASTRADA["orientacao"],
                             dados_pre_carregados=dados_clima,
                             config_obstaculo=obs_config
                         )
@@ -142,9 +146,17 @@ def run_deep_validation():
             inc = int(inc_str)
             
             res = calcular_projeto_solar(
-                coords['latitude'], coords['longitude'], 
-                inclinacao=inc, azimute=0, albedo=0.2, altura_instalacao=1.5,
-                tecnologia="TOPCON", is_bifacial=False, 
+                coords['latitude'], 
+                coords['longitude'], 
+                inclinacao=inc, 
+                azimute=0, 
+                albedo=0.2, 
+                altura_instalacao=1.5,
+                tecnologia="TOPCON", 
+                is_bifacial=False, 
+                comprimento_modulo=2.278,
+                largura_modulo=1.134,
+                orientacao="Retrato",
                 dados_pre_carregados=dados_clima
             )
 
@@ -222,14 +234,40 @@ def run_transposition_test():
         real_sundata_0 = inclinações.get("0", {}).get("Anual")
         
         # Passo 2: Calcular o valor simulado a 0 para criar o fator de proporção
-        sim_0 = calcular_projeto_solar(coords['latitude'], coords['longitude'], 0, 0, 0.2, 1.5, "TOPCON", False, dados_clima)["media"]
+        sim_0 = calcular_projeto_solar(
+            coords['latitude'], 
+            coords['longitude'], 
+            inclinacao=0, 
+            azimute=0, 
+            albedo=0.2, 
+            altura_instalacao=1.5, 
+            tecnologia="TOPCON", 
+            is_bifacial=False, 
+            comprimento_modulo=2.278,
+            largura_modulo=1.134,
+            orientacao="Retrato",
+            dados_pre_carregados=dados_clima
+        )["media"]
 
         for inc_str, ref_data in inclinações.items():
             inc = int(inc_str)
             if inc == 0: continue # Pula a referência
 
             # Passo 3: Calcular o valor simulado para o ângulo alvo
-            sim_alvo = calcular_projeto_solar(coords['latitude'], coords['longitude'], inc, 0, 0.2, 1.5, "TOPCON", False, dados_clima)["media"]
+            sim_alvo = calcular_projeto_solar(
+                coords['latitude'], 
+                coords['longitude'], 
+                inclinacao=inc, 
+                azimute=0, 
+                albedo=0.2, 
+                altura_instalacao=1.5, 
+                tecnologia="TOPCON", 
+                is_bifacial=False, 
+                comprimento_modulo=2.278,
+                largura_modulo=1.134,
+                orientacao="Retrato",
+                dados_pre_carregados=dados_clima
+            )["media"]
             
             # Passo 4: O fator de ganho do seu motor
             fator_transposicao = sim_alvo / sim_0
@@ -287,9 +325,17 @@ def run_shadow_debug_test():
             }
             
         res = calcular_projeto_solar(
-            lat=lat, lon=lon, inclinacao=config["inclinacoes"], azimute=config["azimutes"],
-            albedo=0.2, altura_instalacao=0.2, tecnologia="TOPCON",
-            is_bifacial=True, comprimento_modulo=2.278,
+            lat=lat, 
+            lon=lon, 
+            inclinacao=config["inclinacoes"][0], # Pegando o primeiro valor da lista
+            azimute=config["azimutes"][0],       # Pegando o primeiro valor da lista
+            albedo=0.2, 
+            altura_instalacao=0.2, 
+            tecnologia="TOPCON",
+            is_bifacial=True, 
+            comprimento_modulo=2.278,
+            largura_modulo=1.134,
+            orientacao=caso.get("orientacao", "Retrato"), # Dinâmico por caso de teste
             dados_pre_carregados=dados_clima,
             config_obstaculo=obs_config
         )
@@ -298,7 +344,7 @@ def run_shadow_debug_test():
 
         # Log mais rico no console
         w_log = caso.get("w_obs", 10.0)
-        ori_log = caso.get("orientacao", "Paisagem")
+        ori_log = caso.get("orientacao", "Retrato")
         
         print(f"[{caso['label']}] ({ori_log})")
         print(f"    Obs: H={caso['h_obs']}m | L={w_log}m | D={caso['d_obs']}m | Azi={caso['azi_obs']}°")
