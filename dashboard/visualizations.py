@@ -59,19 +59,19 @@ def renderizar_layout_comparativo(lat, lon, inc, azi, alb, h, tec_chave, modo_bi
         # Cenário A: Seu Projeto
         res_projeto = calcular_projeto_solar(
             lat=lat, lon=lon, inclinacao=inc, azimute=azi, 
-            albedo=alb, altura=h, tecnologia=tec_chave, 
-            is_bifacial=modo_bifacial, panel_width=2.278,
+            albedo=alb, altura_instalacao=h, tecnologia=tec_chave, 
+            is_bifacial=modo_bifacial, comprimento_modulo=2.278,
             dados_pre_carregados=dados_clima,
-            obstacle_config=obstacle_config
+            config_obstaculo=obstacle_config
         )
         
         # Cenário B: Padrão (Inclinação 0, Azimute 0)
         res_padrao = calcular_projeto_solar(
             lat=lat, lon=lon, inclinacao=0, azimute=0, 
-            albedo=alb, altura=h, tecnologia=tec_chave, 
-            is_bifacial=modo_bifacial, panel_width=2.278,
+            albedo=alb, altura_instalacao=h, tecnologia=tec_chave, 
+            is_bifacial=modo_bifacial, comprimento_modulo=2.278,
             dados_pre_carregados=dados_clima,
-            obstacle_config=None
+            config_obstaculo=None
         )
         
         # --- EXIBIÇÃO DE MÉTRICAS E GRÁFICOS ---

@@ -58,20 +58,20 @@ def run_simulation():
                         res_mono = calcular_projeto_solar(
                             lat, lon, inc, azi, alb, h, 
                             tecnologia=PLACA_CADASTRADA["tecnologia"], 
-                            panel_width=dimensao_L, 
+                            comprimento_modulo=dimensao_L, 
                             is_bifacial=False, 
                             dados_pre_carregados=dados_clima,
-                            obstacle_config=obs_config
+                            config_obstaculo=obs_config
                         )
                         
                         # --- CÁLCULO BIFACIAL ---
                         res_bi = calcular_projeto_solar(
                             lat, lon, inc, azi, alb, h, 
                             tecnologia=PLACA_CADASTRADA["tecnologia"], 
-                            panel_width=dimensao_L, 
+                            comprimento_modulo=dimensao_L, 
                             is_bifacial=True, 
                             dados_pre_carregados=dados_clima,
-                            obstacle_config=obs_config
+                            config_obstaculo=obs_config
                         )
                         
                         m_val = res_mono["media"]
@@ -143,7 +143,7 @@ def run_deep_validation():
             
             res = calcular_projeto_solar(
                 coords['latitude'], coords['longitude'], 
-                inclinacao=inc, azimute=0, albedo=0.2, altura=1.5,
+                inclinacao=inc, azimute=0, albedo=0.2, altura_instalacao=1.5,
                 tecnologia="TOPCON", is_bifacial=False, 
                 dados_pre_carregados=dados_clima
             )
@@ -288,10 +288,10 @@ def run_shadow_debug_test():
             
         res = calcular_projeto_solar(
             lat=lat, lon=lon, inclinacao=config["inclinacoes"], azimute=config["azimutes"],
-            albedo=0.2, altura=0.2, tecnologia="TOPCON",
-            is_bifacial=True, panel_width=2.278,
+            albedo=0.2, altura_instalacao=0.2, tecnologia="TOPCON",
+            is_bifacial=True, comprimento_modulo=2.278,
             dados_pre_carregados=dados_clima,
-            obstacle_config=obs_config
+            config_obstaculo=obs_config
         )
         
         perda_str = res.get("perda_sombreamento_estimada", "0%")
