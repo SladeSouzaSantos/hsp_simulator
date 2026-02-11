@@ -1,14 +1,16 @@
 # ☀️ HSP Simulator - Solar Engine API
 
-Este projeto é um simulador de **Horas de Sol Pleno (HSP)** projetado para cálculos de alta precisão em sistemas fotovoltaicos monofaciais e bifaciais. O motor de cálculo utiliza o **Modelo de Irradiância de Perez**, permitindo analisar o impacto da inclinação, azimute, albedo e altura de instalação no desempenho dos módulos.
+Este projeto é um ecossistema de alta precisão para simulação de **Horas de Sol Pleno (HSP)**, especializado em sistemas fotovoltaicos monofaciais e bifaciais. Diferente de calculadoras simples, este motor utiliza o **Modelo de Irradiância de Perez (Perez-1990)** para realizar a transposição de irradiância com rigor científico, permitindo prever ganhos e perdas em cenários complexos de instalação.
 
 ## 🛠️ Funcionalidades Principais
-- **Motor de Irradiância:** Implementação do modelo de Perez para decomposição de irradiância global e difusa.
-- **Ganho Bifacial:** Cálculo técnico considerando o fator de visão (View Factor) e reflexão do solo (Albedo).
-- **Integração NASA POWER:** Busca automática de dados meteorológicos históricos baseada em coordenadas (Latitude/Longitude).
-- **Interface e API:** - **Dashboard:** Visualização comparativa via Streamlit.
-  - **API REST:** Endpoint FastAPI para integração com outros sistemas (retorno em JSON).
-- **Exportação:** Gerador de relatórios CSV otimizados para o padrão brasileiro (Excel).
+* **Motor de Irradiância Avançado:** Implementação do modelo de Perez para decomposição e transposição de irradiância global, difusa e direta.
+* **Análise de Ganho Bifacial:** Cálculo baseado em *View Factor* (Fator de Visão) e Albedo, permitindo simular desde instalações de solo até **Muros Solares** (instalações verticais) com precisão comprovada.
+* **Engine de Sombreamento 3D:** Avaliação do impacto de obstruções fixas (edifícios, muros, postes) com base na geometria solar horária, calculando a penetração da sombra no módulo.
+* **Integração NASA POWER:** Consumo automatizado de dados meteorológicos históricos e climatológicos via API.
+* **Ecossistema Híbrido:**
+    * **API REST (FastAPI):** Endpoints escaláveis com validação Pydantic V2 para integração com CRMs ou softwares de engenharia.
+    * **Dashboard (Streamlit):** Interface analítica para visualização de curvas mensais e comparação de cenários.
+* **Rigor Técnico:** Validação sistemática contra dados do **SunData (CRESESB)**, mantendo desvios médios globais abaixo de 3%.
 
 ## 🔌 Documentação da API (POST `/calcular`)
 
