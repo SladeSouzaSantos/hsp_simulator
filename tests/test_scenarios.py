@@ -42,9 +42,9 @@ SCENARIOS = {
     },
     "validacao_sombra": {
         "descricao": "Teste de Sensibilidade de Obstrução (Sombra)",
-        "lat": -5.79, "lon": -35.21, # Natal/RN
+        "lat": -5.8125, "lon": -35.1875, # Natal/RN        
         "casos": [
-            {"label": "Sem Obstáculo", "h_obs": 0, "d_obs": 2.0, "azi_obs": 0},
+            {"label": "Sem Obstáculo", "h_obs": 0, "d_obs": 2.0, "azi_obs": 0, "altura": 1.5},
             {"label": "Obstáculo Baixo (0.5m)", "h_obs": 0.5, "d_obs": 2.0, "azi_obs": 0},
             {"label": "Obstáculo Médio (3.0m)", "h_obs": 3.0, "d_obs": 2.0, "azi_obs": 0},
             {"label": "Obstáculo Alto (10.0m)", "h_obs": 10.0, "d_obs": 2.0, "azi_obs": 0},

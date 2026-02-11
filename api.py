@@ -60,7 +60,7 @@ class ProjetoSolarRequest(BaseModel):
         0.2, title="Albedo", description="Fator de reflexão do solo (ex: 0.2 para grama)"
     )
     distancia_centro_modulo_chao: float = Field(
-        1.5, title="Altura de Instalação", description="Altura do centro do módulo até o solo (m)"
+        0.15, title="Altura de Instalação", description="Altura do centro do módulo até o solo (m)"
     )
     tecnologia_celula: str = Field(
         "TOPCON", title="Tecnologia", description="Tipo de célula (TOPCON, PERC, AL BSF)"
@@ -111,7 +111,7 @@ def post_hsp(
                     "inclinacao_graus": 15,
                     "azimute_graus": 0,
                     "albedo_solo": 0.2,
-                    "distancia_centro_modulo_chao": 1.5,
+                    "distancia_centro_modulo_chao": 0.15,
                     "tecnologia_celula": "TOPCON",
                     "is_bifacial": True,
                     "comprimento_modulo": 2.278,
@@ -128,7 +128,7 @@ def post_hsp(
                     "inclinacao_graus": 15,
                     "azimute_graus": 0,
                     "albedo_solo": 0.2,
-                    "distancia_centro_modulo_chao": 1.5,
+                    "distancia_centro_modulo_chao": 0.15,
                     "tecnologia_celula": "TOPCON",
                     "is_bifacial": True,
                     "comprimento_modulo": 2.278,
@@ -138,7 +138,7 @@ def post_hsp(
                         "altura_obstaculo": 4.0,
                         "distancia_obstaculo": 2.0,
                         "referencia_azimutal_obstaculo": 0.0,
-                        "largura_obstaculo": 10.0
+                        "largura_obstaculo": 4.0
                     }
                 }
             }
@@ -223,7 +223,7 @@ def post_arranjo(
             altura_instalacao=1.5,
             tecnologia=dados.tecnologia_celula,
             is_bifacial=True,
-            dados_pre_carregados=dados_limpos, # <--- AQUI ESTÁ O CACHE
+            dados_pre_carregados=dados_limpos,
             config_obstaculo=config_sombra
         )
 

@@ -38,7 +38,9 @@ def calcular_posicoes(lat, altura, dia_ano, hora):
     
     return gamma_deg, (gamma_deg + 180) % 360, comprimento_sombra, math.degrees(alpha_rad)
 
-def renderizar_layout_comparativo(lat, lon, inc, azi, alb, h, tec_chave, modo_bifacial, usar_obstaculo, obstacle_config, nome_exibicao):
+def renderizar_layout_comparativo(
+        lat, lon, inc, azi, alb, h, tec_chave, modo_bifacial, 
+        orientacao, usar_obstaculo, config_obstaculo, nome_exibicao):
     # Normalizamos para o cache interno do worker
     lat_fixed = round(float(lat), 4)
     lon_fixed = round(float(lon), 4)
@@ -60,17 +62,19 @@ def renderizar_layout_comparativo(lat, lon, inc, azi, alb, h, tec_chave, modo_bi
         res_projeto = calcular_projeto_solar(
             lat=lat, lon=lon, inclinacao=inc, azimute=azi, 
             albedo=alb, altura_instalacao=h, tecnologia=tec_chave, 
-            is_bifacial=modo_bifacial, comprimento_modulo=2.278,
+            is_bifacial=modo_bifacial,
             dados_pre_carregados=dados_clima,
-            config_obstaculo=obstacle_config
+            orientacao=orientacao,
+            config_obstaculo=config_obstaculo
         )
         
         # Cenário B: Padrão (Inclinação 0, Azimute 0)
         res_padrao = calcular_projeto_solar(
             lat=lat, lon=lon, inclinacao=0, azimute=0, 
             albedo=alb, altura_instalacao=h, tecnologia=tec_chave, 
-            is_bifacial=modo_bifacial, comprimento_modulo=2.278,
+            is_bifacial=modo_bifacial,
             dados_pre_carregados=dados_clima,
+            orientacao=orientacao,
             config_obstaculo=None
         )
         
@@ -125,9 +129,10 @@ def renderizar_grafico_sombra(meses_lista, mes_v, hora_sim, lat, h, usar_obstacu
     mes_num = meses_lista.index(mes_v) + 1
     dia_ano = datetime(2026, mes_num, 21).timetuple().tm_yday
     
-    # Altura de referência para o cálculo do sol/sombra
-    altura_ref = h_obs if usar_obstaculo else h
+    # Altura de referência para o cálculo do sol/sombra     
+    altura_ref = max(0, h_obs - h)
     pos_agora = calcular_posicoes(lat, altura_ref, dia_ano, hora_sim)
+    az_sol, az_sombra, dist_sombra, alt_sol = pos_agora
 
     # --- AJUSTES DE ESCALA (Sua regra: 2x a distância) ---
     # Se não houver obstáculo, usamos um padrão de 10m para visualização do painel
@@ -141,11 +146,13 @@ def renderizar_grafico_sombra(meses_lista, mes_v, hora_sim, lat, h, usar_obstacu
     # Criamos o rastro na borda do gráfico (90% do raio máximo)
     rastro_distancia = max_r * 0.9 
     traj_theta = []
+    alturaSol = []
     
     # Fazemos a varredura do dia para desenhar o caminho
     for hr_track in np.linspace(5.5, 18.5, 60):
         p_track = calcular_posicoes(lat, altura_ref, dia_ano, hr_track)
         if p_track:
+            alturaSol.append(p_track[3]) # Guarda a altitude para possível uso futuro
             traj_theta.append(p_track[0]) # Pega o Azimute do sol
     
     if traj_theta:
@@ -154,47 +161,44 @@ def renderizar_grafico_sombra(meses_lista, mes_v, hora_sim, lat, h, usar_obstacu
             theta=traj_theta,
             mode='lines', 
             name='Trajetória do Sol',
-            line=dict(color='gold', dash='dot', width=3) # Pontilhados amarelos
+            line=dict(color='gold', dash='dot', width=2) # Pontilhados amarelos
         ))
     # =================================================================
 
     # --- ELEMENTO 1: O PAINEL (Escala Real 2.278m) ---
     # 1. Ajuste do Tamanho do Painel baseado na orientação
-    dimensao_referencia_painel = 2.278 if orientacao == "Paisagem" else 1.134
+    dimensao_referencia_painel = 2.278 if orientacao == "Retrato" else 1.134
 
     fig.add_trace(go.Scatterpolar(
-    r=[0, dimensao_referencia_painel], 
-    theta=[azi, azi],
-    mode='lines+markers', 
-    name=f'Módulo FV ({orientacao})',
-    line=dict(color='blue', width=2),
-    marker=dict(
-        symbol='arrow',         # Define o símbolo como seta
-        size=15,                # Ajuste o tamanho da ponta da seta aqui
-        angleref='previous',    # Faz a seta girar automaticamente para o ângulo do azimute
-        color='blue'
-    )
-))
+        r=[0, dimensao_referencia_painel], 
+        theta=[azi, azi],
+        mode='lines+markers', 
+        name=f'Módulo FV ({orientacao})',
+        line=dict(color='blue', width=2),
+        marker=dict(
+            symbol='arrow',         # Define o símbolo como seta
+            size=15,                # Ajuste o tamanho da ponta da seta aqui
+            angleref='previous',    # Faz a seta girar automaticamente para o ângulo do azimute
+            color='blue'
+        )
+    ))
 
     # --- ELEMENTO 2: O OBSTÁCULO E SOMBRA ---
-    dist_sombra = 0
-    if usar_obstaculo and pos_agora:
-        az_sol, az_sombra, dist_sombra, alt_sol = pos_agora
         
-        # Sombra projetada: Começa no obstáculo
-        fig.add_trace(go.Scatterpolar(
-            r=[d_obs, d_obs + dist_sombra], 
-            theta=[azi_obs, az_sombra],
-            mode='lines', name='Sombra Projetada',
-            line=dict(color='rgba(50, 50, 50, 0.4)', width=10)
-        ))
+    # Sombra projetada: Começa no obstáculo
+    fig.add_trace(go.Scatterpolar(
+        r=[d_obs, d_obs + dist_sombra], 
+        theta=[azi_obs, az_sombra],
+        mode='lines', name='Sombra Projetada',
+        line=dict(color='rgba(50, 50, 50, 0.4)', width=10)
+    ))
 
-        # Marcador do Obstáculo
-        fig.add_trace(go.Scatterpolar(
-            r=[d_obs], theta=[azi_obs],
-            mode='markers+text', name='Obstáculo',
-            marker=dict(size=15, color='red', symbol='square')
-        ))
+    # Marcador do Obstáculo
+    fig.add_trace(go.Scatterpolar(
+        r=[d_obs], theta=[azi_obs],
+        mode='markers+text', name='Obstáculo',
+        marker=dict(size=15, color='red', symbol='square')
+    ))
 
     # --- ELEMENTO 3: TRAJETÓRIA DO SOL ---
     traj_theta, traj_r = [], []

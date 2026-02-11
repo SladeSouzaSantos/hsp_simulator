@@ -9,7 +9,7 @@ from services.nasa_gateway import NasaPowerGateway
 from services.solar_service import SolarDataService
 
 def run_simulation():
-    lat, lon = -7.562, -37.688
+    lat, lon = -5.8125, -35.1875
     
     PLACA_CADASTRADA = {
         "modelo": "Astro N5 CHSM72N(DG)/F-BH",
@@ -318,24 +318,20 @@ def run_shadow_debug_test():
                 'distancia_obstaculo': caso["d_obs"],
                 'referencia_azimutal_obstaculo': caso["azi_obs"],
                 'largura_obstaculo': caso.get("w_obs", 10.0),
-                'orientacao_modulo': caso.get("orientacao", "Paisagem"),
-                # Dimensões fixas para o teste de sensibilidade
-                'altura_modulo_fv': 2.278,
-                'largura_modulo_fv': 1.134
             }
             
         res = calcular_projeto_solar(
             lat=lat, 
             lon=lon, 
-            inclinacao=config["inclinacoes"][0], # Pegando o primeiro valor da lista
-            azimute=config["azimutes"][0],       # Pegando o primeiro valor da lista
+            inclinacao=config["inclinacoes"][0],
+            azimute=config["azimutes"][0],
             albedo=0.2, 
-            altura_instalacao=0.2, 
+            altura_instalacao=caso.get("altura", 1.5),
             tecnologia="TOPCON",
             is_bifacial=True, 
             comprimento_modulo=2.278,
             largura_modulo=1.134,
-            orientacao=caso.get("orientacao", "Retrato"), # Dinâmico por caso de teste
+            orientacao=caso.get("orientacao", "Retrato"),
             dados_pre_carregados=dados_clima,
             config_obstaculo=obs_config
         )

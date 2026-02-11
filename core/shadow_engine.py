@@ -5,7 +5,7 @@ class ShadowEngine:
     Motor de Geometria de Sombreamento para Obstruções Fixas.
     """
     
-    def estimar_perda_sombreamento(self, altitude_sol_deg, azimute_sol_deg, comprimento_modulo=2.278, largura_modulo=1.134, orientacao='Retrato', config_obstaculo=None):
+    def estimar_perda_sombreamento(self, altitude_sol_deg, azimute_sol_deg, altura_instalacao_modulo=0.0, comprimento_modulo=2.278, largura_modulo=1.134, orientacao='Retrato', config_obstaculo=None):
         """
         Estima a fração de perda de radiação direta baseada na geometria da sombra projetada.
         
@@ -26,13 +26,21 @@ class ShadowEngine:
         if not config_obstaculo or altitude_sol_deg <= 0:
             return 1.0 if altitude_sol_deg <= 0 else 0.0
 
-        h_obs = config_obstaculo.get('altura_obstaculo', 0.0)
+        h_obs_absoluta = config_obstaculo.get('altura_obstaculo', 0.0)
         d_obs = config_obstaculo.get('distancia_obstaculo', 1.0)
         az_obs = config_obstaculo.get('referencia_azimutal_obstaculo', 0.0) 
         w_obs = config_obstaculo.get('largura_obstaculo', 10.0)
-
+        
+        # Altura efetiva do obstáculo em relação ao painel
+        h_obs = max(0, h_obs_absoluta - altura_instalacao_modulo)
+        # Se o obstáculo é baixo demais para projetar sombra, retorna 0.0
+        if h_obs <= 0:
+            return 0.0 # Sem sombra
+        
+        # A dimensão relevante para calcular a penetração da sombra depende da orientação do painel
         dimensao_percorrida = comprimento_modulo if orientacao == 'Retrato' else largura_modulo
         
+
         # Verificação de Azimute (Abertura da parede)
         meio_angulo_abertura = np.degrees(np.arctan2(w_obs / 2, d_obs))
         

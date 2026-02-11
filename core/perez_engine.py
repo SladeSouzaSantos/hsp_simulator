@@ -2,8 +2,8 @@ import numpy as np
 from core.shadow_engine import ShadowEngine
 
 class PerezEngine:
-    def __init__(self, lat, is_bifacial=False, fator_bifacial=0.85, albedo=0.4, 
-                 altura_instalacao=1.5, comprimento_modulo=2.278, largura_modulo=1.134, orientacao="Retrato"):
+    def __init__(self, lat, is_bifacial=False, fator_bifacial=0.85, albedo=0.2, 
+                 altura_instalacao=0.0, comprimento_modulo=2.278, largura_modulo=1.134, orientacao="Retrato"):
         """
         Motor de cálculo baseado no modelo de Perez para irradiância em superfícies inclinadas.
         
@@ -48,17 +48,19 @@ class PerezEngine:
             # 2. Azimute Solar
             cos_az = (np.sin(delta) * np.cos(self.lat_rad) - np.cos(delta) * np.sin(self.lat_rad) * np.cos(omega)) / np.cos(alt_rad)
             az_deg = np.degrees(np.arccos(np.clip(cos_az, -1, 1)))
-            if omega > 0: az_deg = 360 - az_deg # Ajuste para o período da tarde
+            if omega > 0: 
+                az_deg = 360 - az_deg # Ajuste para o período da tarde
 
             # 3. Verifica sombra            
             perda_ponto = self.shadow_engine.estimar_perda_sombreamento(
                 altitude_sol_deg=alt_deg, 
                 azimute_sol_deg=az_deg, 
+                altura_instalacao_modulo=self.altura_instalacao,
                 comprimento_modulo=self.comprimento_modulo, 
                 largura_modulo=self.largura_modulo, 
                 orientacao=self.orientacao, 
-                config_obstaculo=config_obstaculo
-            )
+                config_obstaculo=config_obstaculo)
+
             perda_acumulada += perda_ponto
         
         return perda_acumulada / len(omega_points)
