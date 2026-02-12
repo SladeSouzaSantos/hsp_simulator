@@ -1,1 +1,1 @@
-from .app import calcular_projeto_solar
+from .app import SolarEngine

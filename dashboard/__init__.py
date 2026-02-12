@@ -1,1 +1,1 @@
-from .visualizations import renderizar_grafico_sombra, renderizar_layout_comparativo
+from .visualizations import SolarDashboardRenderer

@@ -1,8 +1,8 @@
-from fastapi import FastAPI, Body
-from services.nasa_gateway import NasaPowerGateway
-from services.solar_service import SolarDataService
+from fastapi import Body, FastAPI, HTTPException
+from services.providers import NasaPowerProvider
+from services.solar_repository import SolarRepository
 from schemas.schemas import ProjetoSolarRequest, ProjetoSolarResponse, ProjetoArranjoRequest, ArranjoSolarResponse
-from core.app import calcular_projeto_solar
+from core.app import SolarEngine
 
 app = FastAPI(
     title="HSP Simulator - Solar Engine API", 
@@ -11,7 +11,8 @@ app = FastAPI(
     root_path="/api"
 )
 
-
+repo = SolarRepository(provider=NasaPowerProvider())
+engine = SolarEngine(repository=repo)
 
 @app.post("/calcular", response_model=ProjetoSolarResponse, summary="Calcula HSP Corrigido",
     description="Calcula a média de HSP considerando inclinação, azimute, ganho bifacial e sombras."
@@ -63,41 +64,44 @@ def post_hsp(
         }
     )
 ):
-    # Lógica de extração do obstáculo
-    config_sombra = None
-    if dados.config_obstaculo and dados.config_obstaculo.altura_obstaculo > 0:
-        config_sombra = dados.config_obstaculo.model_dump()
+    try:
+        # Lógica de extração do obstáculo
+        config_sombra = None
+        if dados.config_obstaculo and dados.config_obstaculo.altura_obstaculo > 0:
+            config_sombra = dados.config_obstaculo.model_dump()
 
-    # Chamada do core
-    res = calcular_projeto_solar(
-        lat=dados.latitude, 
-        lon=dados.longitude, 
-        inclinacao=dados.inclinacao_graus, 
-        azimute=dados.azimute_graus, 
-        albedo=dados.albedo_solo, 
-        altura_instalacao=dados.distancia_centro_modulo_chao, 
-        tecnologia=dados.tecnologia_celula,
-        is_bifacial=dados.is_bifacial,
-        comprimento_modulo=dados.comprimento_modulo,
-        largura_modulo=dados.largura_modulo,
-        orientacao=dados.orientacao,
-        config_obstaculo=config_sombra,
-        formato="dict"
-    )
+        # Chamada do core
+        res = engine.calcular_projeto_solar(
+            lat=dados.latitude, 
+            lon=dados.longitude, 
+            inclinacao=dados.inclinacao_graus, 
+            azimute=dados.azimute_graus, 
+            albedo=dados.albedo_solo, 
+            altura_instalacao=dados.distancia_centro_modulo_chao, 
+            tecnologia=dados.tecnologia_celula,
+            is_bifacial=dados.is_bifacial,
+            comprimento_modulo=dados.comprimento_modulo,
+            largura_modulo=dados.largura_modulo,
+            orientacao=dados.orientacao,
+            config_obstaculo=config_sombra,
+            formato="dict"
+        )
 
-    return {
-        "kWh/m²/dia": {
-            "real": {
-                "media": res["media"],
-                "mensal": res["mensal"],
+        return {
+            "kWh/m²/dia": {
+                "real": {
+                    "media": res["media"],
+                    "mensal": res["mensal"],
+                },
+                "referencia": {
+                    "media_sem_sombra": res["media_sem_sombra"],
+                    "mensal_sem_sombra": res["mensal_sem_sombra"],
+                }
             },
-            "referencia": {
-                "media_sem_sombra": res["media_sem_sombra"],
-                "mensal_sem_sombra": res["mensal_sem_sombra"],
-            }
-        },
-        "perda_sombreamento_estimada": res["perda_sombreamento_estimada"]
-    }
+            "perda_sombreamento_estimada": res["perda_sombreamento_estimada"]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
 
 @app.post("/calcular-arranjo", response_model=ArranjoSolarResponse, summary="Cálculo em Lote (Com Cache)")
 def post_arranjo(
@@ -274,53 +278,16 @@ def post_arranjo(
     Analisa múltiplas placas/fileiras para a mesma coordenada.
     Mantém a otimização de UMA chamada à API da NASA para todo o lote.
     """
-    # 1. Busca e processa os dados da NASA apenas UMA VEZ para a coordenada global
-    gateway = NasaPowerGateway(dados.latitude, dados.longitude)
-    raw_data = gateway.fetch_climatology()
-    dados_limpos = SolarDataService.standardize_data(raw_data)
-
-    resultados_finais = []
-
-    # 2. Processa cada item usando sua própria configuração individual
-    for item in dados.itens:
-        # Extrai a config de sombra se existir e for válida
-        config_sombra = None
-        if item.config_obstaculo and item.config_obstaculo.altura_obstaculo > 0:
-            config_sombra = item.config_obstaculo.model_dump()
-
-        # Chama o core injetando os dados_pre_carregados e as configs do item
-        res = calcular_projeto_solar(
-            lat=dados.latitude,
-            lon=dados.longitude,
-            inclinacao=item.inclinacao_graus,
-            azimute=item.azimute_graus,
-            albedo=item.albedo_solo,
-            altura_instalacao=item.distancia_centro_modulo_chao,
-            tecnologia=item.tecnologia_celula,
-            is_bifacial=item.is_bifacial,
-            comprimento_modulo=item.comprimento_modulo,
-            largura_modulo=item.largura_modulo,
-            orientacao=item.orientacao,
-            dados_pre_carregados=dados_limpos, # Otimização aqui
-            config_obstaculo=config_sombra
+    try:
+        resultados = engine.calcular_arranjo_completo(
+            lat=dados.latitude, 
+            lon=dados.longitude, 
+            itens=dados.itens
         )
-
-        resultados_finais.append({
-            "id_placa": item.id_placa,
-            "kWh/m²/dia": {
-                "real": {
-                    "media": res["media"],
-                    "mensal": res["mensal"],
-                },
-                "referencia": {
-                    "media_sem_sombra": res["media_sem_sombra"],
-                    "mensal_sem_sombra": res["mensal_sem_sombra"],
-                }
-            },
-            "perda_sombreamento_estimada": res["perda_sombreamento_estimada"]
-        })
-
-    return {
-        "total_placas": len(resultados_finais),
-        "resultados": resultados_finais
-    }
+        
+        return {
+            "total_placas": len(resultados),
+            "resultados": resultados
+        }
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))

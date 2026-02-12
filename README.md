@@ -2,23 +2,28 @@
 
 Este projeto é um ecossistema de alta precisão para simulação de **Horas de Sol Pleno (HSP)**, especializado em sistemas fotovoltaicos monofaciais e bifaciais. Diferente de calculadoras simples, este motor utiliza o **Modelo de Irradiância de Perez (Perez-1990)** para realizar a transposição de irradiância com rigor científico, permitindo prever ganhos e perdas em cenários complexos de instalação.
 
+---
+
 ## 🛠️ Funcionalidades Principais
 * **Motor de Irradiância Avançado:** Implementação do modelo de Perez para decomposição e transposição de irradiância global, difusa e direta.
 * **Análise de Ganho Bifacial:** Cálculo baseado em *View Factor* (Fator de Visão) e Albedo, permitindo simular desde instalações de solo até **Muros Solares** (instalações verticais) com precisão comprovada.
 * **Engine de Sombreamento 3D:** Avaliação do impacto de obstruções fixas (edifícios, muros, postes) com base na geometria solar horária, calculando a penetração da sombra no módulo.
 * **Integração NASA POWER:** Consumo automatizado de dados meteorológicos históricos e climatológicos via API.
-* **Ecossistema Híbrido:**
+* **Ecossistema Híbrido:** API REST (FastAPI) e Dashboard analítico (Streamlit).
     * **API REST (FastAPI):** Endpoints escaláveis com validação Pydantic V2 para integração com CRMs ou softwares de engenharia.
     * **Dashboard (Streamlit):** Interface analítica para visualização de curvas mensais e comparação de cenários.
+* **Sistema de Benchmarking:** Auditoria automatizada que valida a precisão do motor contra dados reais do **SunData (CRESESB)**.
 * **Rigor Técnico:** Validação sistemática contra dados do **SunData (CRESESB)**, mantendo desvios médios globais abaixo de 3%.
+
+---
 
 ## 🔌 Documentação da API (POST `/calcular`)
 
 A API utiliza **Pydantic V2** para garantir tipagem rigorosa e utiliza *aliases* para fornecer nomes técnicos padronizados no JSON de saída.
 
 ### Principais Endpoints
-* `POST /calcular`: Cálculo detalhado para um único cenário.
-* `POST /calcular-arranjo`: Processamento em lote para múltiplos módulos, otimizando as chamadas de dados climatológicos da NASA.
+* `POST /calcular`: Cálculo detalhado para um único cenário técnico.
+* `POST /calcular-arranjo`: Processamento em lote para múltiplos módulos, otimizando as chamadas de dados da NASA via cache.
 
 ### 1. POST `/calcular`
 Ideal para simulações rápidas de um único cenário técnico.
@@ -34,6 +39,7 @@ Ideal para simulações rápidas de um único cenário técnico.
 | `distancia_centro_modulo_chao` | float | Altura de instalação (m) |
 | `tecnologia_celula` | string | TOPCON, PERC, AL BSF |
 | `is_bifacial` | bool | Ativar face traseira (Default: true) |
+| `config_obstaculo` | dict | (Opcional) Objeto com `altura_obstaculo`, `distancia_obstaculo` e `referencia_azimutal_obstaculo`. |
 
 ---
 
@@ -45,42 +51,58 @@ Projetado para processar múltiplas placas (strings ou arranjos complexos) em um
 | :--- | :--- | :--- |
 | `latitude` | float | Latitude comum ao arranjo |
 | `longitude` | float | Longitude comum ao arranjo |
-| `itens` | list[dict] | Lista de objetos contendo `id_placa` e suas configurações técnicas individuais (inclinação, azimute, obstáculos, etc) |
+| `itens` | list[dict] | Lista de objetos contendo `id_placa` e suas configurações técnicas individuais (inclinação, obstáculos, etc). |
+
+> [!TIP]
+> Este endpoint realiza apenas **uma consulta** à API da NASA para todo o lote, garantindo alta performance mesmo em grandes arranjos.
 
 ---
 
 ### 📊 Exemplo de Resposta Padronizada
-Ambos os endpoints retornam os dados seguindo a estrutura de comparação entre o cenário real (com perdas) e o potencial teórico (sem sombras):
+O motor retorna os resultados comparando o cenário real (com perdas) e o potencial teórico (referência):
 
 ```json
 {
-  "kWh/m²/dia": {
-    "real": {
-      "media": 5.882,
-      "mensal": [5.55, 5.84, 5.99, 5.69, 5.67, 5.10, 5.51, 6.31, 6.57, 6.43, 6.17, 5.72]
-    },
-    "referencia": {
-      "media_sem_sombra": 5.942,
-      "mensal_sem_sombra": [5.62, 5.84, 5.99, 5.76, 5.79, 5.36, 5.62, 6.31, 6.57, 6.43, 6.17, 5.79]
+  "total_placas": 1,
+  "resultados": [
+    {
+      "id_placa": "Módulo_Norte_01",
+      "kWh/m²/dia": {
+        "real": {
+          "media": 5.882,
+          "mensal": [5.55, 5.84, 5.99, 5.69, 5.67, 5.10, 5.51, 6.31, 6.57, 6.43, 6.17, 5.72]
+        },
+        "referencia": {
+          "media_sem_sombra": 5.942,
+          "mensal_sem_sombra": [5.62, 5.84, 5.99, 5.76, 5.79, 5.36, 5.62, 6.31, 6.57, 6.43, 6.17, 5.79]
+        }
+      },
+      "perda_sombreamento_estimada": "1.6%"
     }
-  },
-  "perda_sombreamento_estimada": "1.6%"
+  ]
 }
 ```
 
 > [!NOTE]
 > Os valores da lista `mensal` representam o HSP ($kWh/m²/dia$) para cada mês do ano, facilitando a plotagem de gráficos ou cálculos de geração mensal.
 
-## 📂 Estrutura do Repositório
-O projeto segue uma arquitetura modular focada em separação de responsabilidades:
+---
 
-- **`core/`**: O motor de cálculo. Contém o `perez_engine.py` (física da irradiância) e o `shadow_engine.py` (geometria de sombras).
-- **`services/`**: Gateways de comunicação com a NASA POWER e padronização de dados.
-- **`schemas/`**: Contratos de dados (Pydantic Models) que garantem a integridade da API.
-- **`data/`**: Base de dados JSON para validação e testes comparativos.
-- **`utils/`**: Constantes técnicas (tecnologias de células) e ferramentas de exportação.
-- **`api.py`**: Ponto de entrada FastAPI.
-- **`dashboard.py`**: Interface visual interativa em Streamlit.
+## 📂 Estrutura do Repositório
+
+O projeto segue uma arquitetura modular focada em separação de responsabilidades e rigor técnico:
+
+- **`core/`**: O coração do ecossistema. Contém os motores de física (`perez_engine.py`) e de geometria solar/sombras (`shadow_engine.py`).
+- **`benchmarks/`**: O centro de garantia de qualidade. Contém o `auditor.py` e scripts para execução de auditorias técnicas e validação de precisão.
+- **`services/`**: Camada de infraestrutura para comunicação com a NASA POWER e repositórios de dados climatológicos.
+- **`schemas/`**: Contratos de dados (Pydantic V2) que garantem a integridade das requisições e a tipagem rigorosa da API.
+- **`tests/fixtures/`**: Dados de referência imutáveis (Gabarito CRESESB) utilizados para validar a física do motor contra padrões reais.
+- **`data/`**: Pasta destinada aos arquivos de localidades e saída dos relatórios de auditoria em `.csv`.
+- **`utils/`**: Ferramentas utilitárias, como o `exporter.py` (otimizado para Excel BR) e constantes técnicas de albedo e células.
+- **`api.py`**: Ponto de entrada FastAPI com documentação automática e suporte a processamento em lote.
+- **`dashboard.py`**: Interface visual analítica desenvolvida em Streamlit para visualização de curvas e comparação de cenários.
+
+---
 
 ## ⚖️ Validação e Rigor Técnico
 
@@ -115,23 +137,28 @@ A tabela abaixo compara o HSP base (inclinação 0°) do SunData com a previsão
 > [!TIP]
 > A precisão de 0.00% em latitudes próximas ao equador demonstra que a implementação do modelo de transposição está perfeitamente alinhada com os padrões de mercado.
 
-## 🧪 Como Executar os Testes de Validação
+---
 
-O projeto inclui um painel interativo para validar novas implementações ou verificar a precisão em diferentes localidades.
+## 🧪 Como Executar as Auditorias (Benchmarks)
 
-1. Certifique-se de que os arquivos `localidades.json` e `amostragem_sundata.json` estão na pasta `data/`.
+O sistema conta com um **Solar Auditor** dedicado que valida tanto a física de transposição quanto a sensibilidade da engine de sombreamento. Diferente de testes simples, os benchmarks geram relatórios de auditoria para análise de engenharia.
 
-2. Execute o painel de testes:
+1. Certifique-se de que os arquivos de referência estão em suas respectivas pastas (`data/` e `tests/fixtures/`).
+
+2. Execute a bateria completa de auditoria:
 ```bash
-python -m tests.run_tests
+python -m benchmarks.run_benchmarks
 ```
 
-### Opções Disponíveis no Painel:
-* **[1] Simulação Técnica:** Gera cenários complexos (Muro solar, variação de altura e albedo) para testar o comportamento bifacial.
-* **[2] Comparativo de Fontes:** Compara diretamente os dados brutos da NASA POWER com o SunData (CRESESB).
-* **[3] Teste de Transposição Pura:** O teste mais rigoroso; valida se a física de inclinação da API é idêntica à dos softwares de referência.
-* **[4] Debug de Sombra:** Simula obstruções (Edifícios, Muros, Postes) em diferentes azimutes para medir a sensibilidade da perda.
-* **[5] Executar Tudo:** Gera relatórios detalhados em `.csv` na pasta `data/` para análise profunda.
+### O que o sistema atesta:
+* **Validação CRESESB (Transposição):** Compara o motor contra o gabarito oficial do SunData em múltiplas latitudes, validando a precisão matemática do modelo de Perez.
+* **Sensibilidade de Obstrução:** Verifica se obstáculos (muros, prédios, postes) geram perdas de HSP coerentes com a geometria solar horária.
+* **Geração de Relatórios:** Exporta automaticamente os resultados para análise técnica detalhada.
+
+> [!IMPORTANT]
+> Os relatórios de auditoria são salvos em `VALIDACAO_CRESESB_ATTESTED.csv` e `BENCHMARK_SOMBRA_FINAL.csv` dentro da pasta `data/`.
+
+---
 
 ## 🚀 Como começar
 
@@ -140,15 +167,17 @@ python -m tests.run_tests
 pip install -r requirements.txt
 ```
 
-2. Execute o Dashboard:
+2. Execute o Dashboard (Front-End):
 ```bash
 streamlit run dashboard.py
 ```
 
-3. Execute a API:
+3. Execute a API (Back-End):
 ```bash
 uvicorn api:app --reload
 ```
+
+---
 
 ## 📄 Licença
 Distribuído sob a licença MIT. Veja o arquivo LICENSE para mais detalhes.

@@ -30,7 +30,7 @@ class ProjetoSolarResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 class ItemArranjoResponse(BaseModel):
-    id_placa: str = Field(..., title="ID do Módulo", example="Placa_01")
+    id_placa: str = Field(..., title="ID do Módulo", json_schema_extra={"example": "Placa_01"})
     
     # O alias permite que a chave no JSON seja a unidade técnica
     hsp_unidade: UnidadeEnergia = Field(
@@ -106,11 +106,11 @@ class ProjetoSolarRequest(ConfigTecnicaBase):
     longitude: float = Field(..., title="Longitude", json_schema_extra={"example": -37.688})
     
 class ItemArranjoRequest(ConfigTecnicaBase):
-    id_placa: str = Field(..., title="Identificador", example="Modulo_01")
+    id_placa: str = Field(..., title="Identificador", json_schema_extra={"example": "Modulo_01"})
 
 class ProjetoArranjoRequest(BaseModel):
-    latitude: float = Field(..., example=-7.562)
-    longitude: float = Field(..., example=-37.688)
+    latitude: float = Field(..., json_schema_extra={"example": -7.562})
+    longitude: float = Field(..., json_schema_extra={"example": -37.688})
     # Lista de placas/fileiras para analisar
     itens: List[ItemArranjoRequest]
 

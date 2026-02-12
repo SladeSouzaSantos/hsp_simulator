@@ -5,7 +5,7 @@ from core.app import calcular_projeto_solar
 from tests.test_scenarios import SCENARIOS
 from utils.constants import CELL_TECHNOLOGY_REFERENCE
 from utils.exporter import SolarExporter
-from services.nasa_gateway import NasaPowerGateway
+from services.providers.solar_data_provider import SolarDataGateway
 from services.solar_service import SolarDataService
 
 def run_simulation():
@@ -29,7 +29,7 @@ def run_simulation():
     
     # --- PRÉ-CARREGAMENTO ---
     print(f"Buscando dados meteorológicos para {lat}, {lon}...")
-    gateway = NasaPowerGateway(lat, lon)
+    gateway = SolarDataGateway(lat, lon)
     dados_clima = SolarDataService.standardize_data(gateway.fetch_climatology())
 
     print(f"\nINICIANDO TESTE TÉCNICO - PLACA: {PLACA_CADASTRADA['modelo']}")
@@ -135,7 +135,7 @@ def run_deep_validation():
         
         if not coords: continue
 
-        gateway = NasaPowerGateway(coords['latitude'], coords['longitude'])
+        gateway = SolarDataGateway(coords['latitude'], coords['longitude'])
         dados_clima = SolarDataService.standardize_data(gateway.fetch_climatology())
 
         api_ref_0 = None
@@ -227,7 +227,7 @@ def run_transposition_test():
                     break
         if not coords: continue
 
-        gateway = NasaPowerGateway(coords['latitude'], coords['longitude'])
+        gateway = SolarDataGateway(coords['latitude'], coords['longitude'])
         dados_clima = SolarDataService.standardize_data(gateway.fetch_climatology())
 
         # Passo 1: Pegar a base real de 0 graus do SunData
@@ -304,7 +304,7 @@ def run_shadow_debug_test():
     lat, lon = config["lat"], config["lon"]
     
     # Pré-carregamento dos dados para ser rápido
-    gateway = NasaPowerGateway(lat, lon)
+    gateway = SolarDataGateway(lat, lon)
     dados_clima = SolarDataService.standardize_data(gateway.fetch_climatology())
     
     results = []

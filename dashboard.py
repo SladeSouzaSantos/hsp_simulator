@@ -1,8 +1,18 @@
 import json
 import streamlit as st
 from datetime import datetime
-from dashboard.visualizations import renderizar_grafico_sombra, renderizar_layout_comparativo
+from core.app import SolarEngine
+from dashboard.visualizations import SolarDashboardRenderer
+from services.providers.nasa_power_provider import NasaPowerProvider
+from services.solar_repository import SolarRepository
 from utils.constants import ALBEDO_REFERENCE, CELL_TECHNOLOGY_REFERENCE
+
+# Inicializa a infraestrutura
+repo = SolarRepository(provider=NasaPowerProvider())
+engine = SolarEngine(repository=repo)
+
+# Inicializa o renderizador injetando as dependências
+renderer = SolarDashboardRenderer(engine=engine, repository=repo)
 
 # --- CARREGAMENTO DE LOCALIDADES ---
 @st.cache_data
@@ -16,8 +26,8 @@ st.set_page_config(page_title="Dimensionador HSP", layout="wide")
 st.title("☀️ Comparativo Solar: Projeto vs. Referência (0°/0°)")
 
 # --- LÓGICA DE CACHE INTELIGENTE ---
-if 'cache_nasa' not in st.session_state:
-    st.session_state.cache_nasa = {}
+if 'cache_api_data' not in st.session_state:
+    st.session_state.cache_api_data = {}
 
 # Barra lateral para inputs
 with st.sidebar:
@@ -112,13 +122,13 @@ with st.sidebar:
         mes_v = c1.selectbox("Mês de Referência", meses_lista, index=datetime.now().month - 1)
         hora_sim = c2.slider("Horário da Simulação", 8.0, 16.0, 12.0, step=0.5, format="%g h")
         
-        renderizar_grafico_sombra(meses_lista, mes_v, hora_sim, lat, h, usar_obstaculo, h_obs, d_obs, azi_obs, azi, orientacao) 
+        renderer.renderizar_grafico_sombra(meses_lista, mes_v, hora_sim, lat, h, usar_obstaculo, h_obs, d_obs, azi_obs, azi, orientacao) 
     else:
         api_obstacle_config = None    
         orientacao = "Retrato" # Valor padrão, pode ser ajustado na configuração do obstáculo
 
 if st.button("Calcular e Comparar"):
-    renderizar_layout_comparativo(
+    renderer.renderizar_layout_comparativo(
         lat=lat, 
         lon=lon, 
         inc=inc, 
