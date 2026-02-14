@@ -22,6 +22,11 @@ class InpeLabrenProvider(SolarDataProvider):
         self.df = pd.read_parquet(data_path)
 
     def get_solar_data(self, lat: float, lon: float) -> dict:
+        # Trava Geográfica: O Atlas INPE só é válido para a América do Sul
+        # Aproximadamente: Lat (-55 a 15) e Lon (-95 a -30)
+        if not (-60 <= lat <= 15 and -95 <= lon <= -30):
+            raise ValueError(f"Coordenadas {lat}, {lon} fora da cobertura do Atlas INPE/LABREN.")
+        
         # Busca por proximidade no grid de 10km x 10km 
         distances = np.sqrt((self.df['LAT'] - lat)**2 + (self.df['LON'] - lon)**2)
         row = self.df.iloc[distances.idxmin()]

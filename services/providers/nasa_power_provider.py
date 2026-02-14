@@ -42,5 +42,10 @@ class NasaPowerProvider(SolarDataProvider):
             "hsp_global": [raw_data['ALLSKY_SFC_SW_DWN'][m] * 0.024 for m in months],
             "hsp_diffuse": [raw_data['ALLSKY_SFC_SW_DIFF'][m] * 0.024 for m in months],
             "temp_max": [raw_data['T2M_MAX'][m] for m in months],
-            "wind_speed": [raw_data['WS10M'][m] for m in months]
+            "wind_speed": [raw_data['WS10M'][m] for m in months],
+            "metadata": {
+                "source": "NASA POWER Project",
+                "lat": lat,
+                "lon": lon
+            }
         }

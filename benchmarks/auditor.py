@@ -2,6 +2,7 @@ import os
 import json
 import pandas as pd
 from core.app import SolarEngine
+from services.providers import InpeLabrenProvider, NasaPowerProvider, PvgisProvider
 from tests.test_scenarios import SCENARIOS
 
 class SolarAuditor:
@@ -125,3 +126,26 @@ class SolarAuditor:
 
         return results
     
+    def comparar_provedores_por_capital(self, lat, lon, cidade_nome):
+        relatorio = []
+        # Lista de provedores que você quer testar
+        provedores = [InpeLabrenProvider(), NasaPowerProvider(), PvgisProvider()]
+        
+        print(f"\n🌍 Comparando dados para: {cidade_nome}")
+        
+        for p in provedores:
+            try:
+                # Força a busca diretamente no provedor específico
+                dados = p.get_solar_data(lat, lon)
+                hsp_anual = sum(dados["hsp_global"]) / 12
+                
+                relatorio.append({
+                    "Provedor": p.__class__.__name__,
+                    "HSP_Anual": round(hsp_anual, 3),
+                    "Fonte": dados["metadata"]["source"]
+                })
+                print(f"   - {p.__class__.__name__}: {hsp_anual:.2f} kWh/m²/dia")
+            except Exception as e:
+                print(f"   - {p.__class__.__name__}: Falhou ({e})")
+                
+        return relatorio
