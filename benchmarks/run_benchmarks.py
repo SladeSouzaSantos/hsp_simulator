@@ -1,11 +1,10 @@
 from core.app import SolarEngine
-from services.solar_repository import SolarRepository
-from services.providers import NasaPowerProvider
+from services.deps import Dependencies
 from benchmarks.auditor import SolarAuditor
 from utils.exporter import SolarExporter
 
 # Inicializa o ecossistema oficial
-repo = SolarRepository(provider=NasaPowerProvider())
+repo = Dependencies.get_solar_repository()
 engine = SolarEngine(repository=repo)
 auditor = SolarAuditor(engine)
 

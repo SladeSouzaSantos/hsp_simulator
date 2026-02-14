@@ -26,11 +26,11 @@ def test_repository_com_dados_sundata(mock_cresesb_data):
 
     # 2. Criamos o Mock do Provedor
     mock_provider = MagicMock()
-    # Note que agora mockamos o método final 'get_solar_data'
+    mock_provider.name = "MockProvider"
     mock_provider.get_solar_data.return_value = dados_padronizados
 
     # 3. Injetamos no Repositório
-    repo = SolarRepository(provider=mock_provider)
+    repo = SolarRepository(providers=[mock_provider])
 
     # 4. Executamos
     resultado = repo.get_standardized_data(lat=-5.79, lon=-35.20)

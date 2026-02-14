@@ -1,6 +1,5 @@
-from fastapi import Body, FastAPI, HTTPException
-from services.providers import NasaPowerProvider
-from services.solar_repository import SolarRepository
+from fastapi import Body, Depends, FastAPI, HTTPException
+from services import Dependencies
 from schemas.schemas import ProjetoSolarRequest, ProjetoSolarResponse, ProjetoArranjoRequest, ArranjoSolarResponse
 from core.app import SolarEngine
 
@@ -11,8 +10,9 @@ app = FastAPI(
     root_path="/api"
 )
 
-repo = SolarRepository(provider=NasaPowerProvider())
-engine = SolarEngine(repository=repo)
+def get_engine():
+    repo = Dependencies.get_solar_repository()
+    return SolarEngine(repository=repo)
 
 @app.post("/calcular", response_model=ProjetoSolarResponse, summary="Calcula HSP Corrigido",
     description="Calcula a média de HSP considerando inclinação, azimute, ganho bifacial e sombras."
@@ -62,7 +62,8 @@ def post_hsp(
                 }
             }
         }
-    )
+    ),
+    engine: SolarEngine = Depends(get_engine)
 ):
     try:
         # Lógica de extração do obstáculo
@@ -272,7 +273,8 @@ def post_arranjo(
                 }
             }
         }
-    )
+    ),
+    engine: SolarEngine = Depends(get_engine)    
 ):
     """
     Analisa múltiplas placas/fileiras para a mesma coordenada.

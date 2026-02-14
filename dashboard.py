@@ -3,12 +3,12 @@ import streamlit as st
 from datetime import datetime
 from core.app import SolarEngine
 from dashboard.visualizations import SolarDashboardRenderer
-from services.providers.nasa_power_provider import NasaPowerProvider
-from services.solar_repository import SolarRepository
+from services.deps import Dependencies
 from utils.constants import ALBEDO_REFERENCE, CELL_TECHNOLOGY_REFERENCE
 
 # Inicializa a infraestrutura
-repo = SolarRepository(provider=NasaPowerProvider())
+
+repo = Dependencies.get_solar_repository()
 engine = SolarEngine(repository=repo)
 
 # Inicializa o renderizador injetando as dependências
