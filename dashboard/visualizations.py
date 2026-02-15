@@ -47,20 +47,21 @@ class SolarDashboardRenderer:
 
     def renderizar_layout_comparativo(
             self, lat, lon, inc, azi, alb, h, tec_chave, modo_bifacial, 
-            orientacao, usar_obstaculo, config_obstaculo, nome_exibicao):
+            orientacao, usar_obstaculo, config_obstaculo, nome_exibicao, provider_forcado=None):
         # Normalizamos para o cache interno do worker
         lat_fixed = round(float(lat), 4)
         lon_fixed = round(float(lon), 4)
-        chave_local = f"{lat_fixed}_{lon_fixed}"
+        nome_provider = provider_forcado if provider_forcado else "Auto"
+        chave_local = f"{lat_fixed}_{lon_fixed}_{nome_provider}"
         
-        # 1. Gerenciamento de Dados (NASA)
+        # 1. Gerenciamento de Dados
         if chave_local in st.session_state.cache_api_data:
             dados_clima = st.session_state.cache_api_data[chave_local]
         else:
             with st.spinner("Buscando novos dados na NASA..."):
-                dados_clima = self.repository.get_standardized_data(lat_fixed, lon_fixed)
+                dados_clima = self.repository.get_standardized_data(lat=lat_fixed, lon=lon_fixed, force_provider=provider_forcado)
                 st.session_state.cache_api_data[chave_local] = dados_clima
-                st.success("✅ Dados carregados!")
+                st.success(f"✅ Dados carregados via {dados_clima['metadata']['source']}!")
 
         # 2. Execução dos Cálculos (Dois Cenários)
         with st.spinner("Calculando modelos..."):

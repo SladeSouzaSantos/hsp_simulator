@@ -63,6 +63,13 @@ with st.sidebar:
         sigla_sel = "Custom"
     
     st.caption(f"📍 Coordenadas: {lat}, {lon}")
+
+    st.subheader("⚙️ Configuração do Motor")
+    opcoes_provedores = ["Automático (Resiliência)", "NASA POWER", "INPE/LABREN Atlas 2017", "PVGIS"]
+    escolha_provedor = st.selectbox("Fonte de Dados Solar", opcoes_provedores)
+
+    # CORREÇÃO: Variável nomeada corretamente para bater com a chamada abaixo
+    force_provider_name = None if escolha_provedor == "Automático (Resiliência)" else escolha_provedor
     
     st.divider()
     
@@ -140,4 +147,5 @@ if st.button("Calcular e Comparar"):
         orientacao=orientacao,
         usar_obstaculo=usar_obstaculo,
         config_obstaculo=api_obstacle_config,
-        nome_exibicao=nome_exibicao)
+        nome_exibicao=nome_exibicao,
+        provider_forcado=force_provider_name)
