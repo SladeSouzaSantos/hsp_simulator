@@ -26,7 +26,7 @@ def test_cache_logic_integration(mock_components):
     st.session_state.cache_api_data = {}
     
     # Mock do retorno do repositório
-    repo.get_standardized_data.return_value = {"hsp_global": [5.0]*12}
+    repo.get_standardized_data.return_value = {"hsp_global": [5.0]*12, "metadata": {"source": "NASA POWER"}}
     engine.calcular_projeto_solar.return_value = {"media": 5.0, "mensal": [5.0]*12}
 
     # Executa uma renderização parcial (apenas para testar o fluxo de dados)
@@ -34,9 +34,9 @@ def test_cache_logic_integration(mock_components):
     renderer.renderizar_layout_comparativo(
         lat=-7.0, lon=-35.0, inc=15, azi=0, alb=0.2, h=1.0, 
         tec_chave="TOPCON", modo_bifacial=True, orientacao="Retrato",
-        usar_obstaculo=False, config_obstaculo=None, nome_exibicao="Teste"
+        usar_obstaculo=False, config_obstaculo=None, nome_exibicao="Teste", provider_forcado="NASA POWER"
     )
 
     # Verifica se o repositório foi chamado (provas de que a integração funciona)
     repo.get_standardized_data.assert_called_once()
-    assert "-7.0_-35.0" in st.session_state.cache_api_data
+    assert "-7.0_-35.0_NASA POWER" in st.session_state.cache_api_data
