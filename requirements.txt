@@ -13,6 +13,12 @@ numpy
 scipy
 altair
 plotly
+pvlib
+astral
+pyarrow
+pytz
 
-# Utilitários
+# Utilitários & Testes
 python-dotenv
+pytest
+pytest-asyncio

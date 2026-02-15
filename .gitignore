@@ -4,39 +4,44 @@ __pycache__/
 *$py.class
 *.so
 .Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
 *.egg-info/
-.installed.cfg
 *.egg
 
 # Ambientes Virtuais
 venv/
 .venv/
 env/
-ENV/
+bin/
+
+# IDEs (Importante para portfólio limpo)
+.vscode/
+.idea/
 
 # Streamlit e Logs
 .streamlit/
 *.log
 
-# Dados e Configurações Sensíveis
+# --- DADOS E RELATÓRIOS ---
+
+# Bloqueia todos os CSVs e JSONs por padrão
 data/*.csv
 data/*.json
-.env
-!data/localidades.json
-!data/amostragem_sundata.json
 
-# Sistema (macOS / Windows)
+# Exceções (Arquivos que PRECISAM ir para o GitHub)
+!data/localidades.json
+!tests/fixtures/amostragem_sundata.json
+
+# Protege os metadados e o banco do INPE (se quiser versionar o parquet)
+# Se o .parquet for muito grande, remova a exclamação abaixo:
+!data/inpe_labren/*.parquet
+!data/inpe_labren/*.pdf
+
+# Benchmark Documents
+benchmarks/documents/*
+
+# Configurações Sensíveis
+.env
+
+# Sistema
 .DS_Store
 Thumbs.db

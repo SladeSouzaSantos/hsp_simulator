@@ -6,6 +6,7 @@ from .solar_data_provider import SolarDataProvider
 class NasaPowerProvider(SolarDataProvider):
     def __init__(self):
         self.url = "https://power.larc.nasa.gov/api/temporal/climatology/point"
+        self.name = "NASA POWER Project"
 
     @staticmethod
     @lru_cache(maxsize=128)

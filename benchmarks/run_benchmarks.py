@@ -1,3 +1,4 @@
+import os
 from core.app import SolarEngine
 from services.deps import Dependencies
 from benchmarks.auditor import SolarAuditor
@@ -9,6 +10,10 @@ engine = SolarEngine(repository=repo)
 auditor = SolarAuditor(engine)
 
 def main():
+    output_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "documents")
+    if not os.path.exists(output_path):
+        os.makedirs(output_path)
+        
     print("="*60)
     print("       HSP SIMULATOR: SISTEMA DE AUDITORIA UNIFICADO")
     print("="*60)
@@ -17,7 +22,7 @@ def main():
     # Valida a geometria de obstáculos (muros, prédios, postes)
     print("\n[1/3] Executando Auditoria de Sombra...")
     dados_sombra = auditor.rodar_benchmark_sombra()
-    SolarExporter.export_to_csv("BENCHMARK_SOMBRA_FINAL.csv", dados_sombra)
+    SolarExporter.export_to_csv(os.path.join(output_path, "BENCHMARK_SOMBRA_FINAL.csv"), dados_sombra)
     
     # --- TESTE 2: VALIDAÇÃO CRESESB (TRANSPOSIÇÃO) ---
     # Valida se a matemática de Perez/Hay-Davies bate com dados reais do SunData
@@ -25,7 +30,7 @@ def main():
     try:
         dados_cresesb = auditor.validar_transposicao_cresesb()
         if dados_cresesb:
-            SolarExporter.export_to_csv("VALIDACAO_CRESESB_ATTESTED.csv", dados_cresesb)
+            SolarExporter.export_to_csv(os.path.join(output_path, "VALIDACAO_CRESESB_ATTESTED.csv"), dados_cresesb)
         else:
             print("[AVISO] Nenhum dado retornado da validação CRESESB.")
     except Exception as e:
@@ -45,10 +50,10 @@ def main():
         comparativo_total.extend(resultado)
 
     if comparativo_total:
-        SolarExporter.export_to_csv("COMPARATIVO_PROVIDERS.csv", comparativo_total)
+        SolarExporter.export_to_csv(os.path.join(output_path, "COMPARATIVO_PROVIDERS.csv"), comparativo_total)
     
     print("\n" + "="*60)
-    print("✅ Auditoria Completa: Relatórios gerados na pasta /data")
+    print(f"✅ Auditoria Completa: Ficheiros guardados em {output_path}")
     print("="*60)
 
 if __name__ == "__main__":

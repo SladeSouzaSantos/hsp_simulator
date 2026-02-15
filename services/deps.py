@@ -7,9 +7,9 @@ class Dependencies:
     def get_solar_repository() -> SolarRepository:
         
         providers = [
+            NasaPowerProvider(),
             InpeLabrenProvider(),
-            PvgisProvider(),
-            NasaPowerProvider()
+            PvgisProvider()
         ]
         
         return SolarRepository(providers=providers)
