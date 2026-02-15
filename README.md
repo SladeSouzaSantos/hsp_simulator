@@ -6,6 +6,7 @@ Este projeto é um ecossistema de alta precisão para simulação de **Horas de 
 
 ## 🛠️ Funcionalidades Principais
 * **Motor de Irradiância Avançado:** Implementação do modelo de Perez para decomposição e transposição de irradiância global, difusa e direta.
+* **Arquitetura Multi-Provider (Resiliência):** Repositório de dados inteligente que orquestra múltiplas fontes (**NASA POWER**, **INPE/LABREN**, **PVGIS**) com lógica de *fallback* automático e cache integrado.
 * **Análise de Ganho Bifacial:** Cálculo baseado em *View Factor* (Fator de Visão) e Albedo, permitindo simular desde instalações de solo até **Muros Solares** (instalações verticais) com precisão comprovada.
 * **Engine de Sombreamento 3D:** Avaliação do impacto de obstruções fixas (edifícios, muros, postes) com base na geometria solar horária, calculando a penetração da sombra no módulo.
 * **Integração NASA POWER:** Consumo automatizado de dados meteorológicos históricos e climatológicos via API.
@@ -93,12 +94,12 @@ O motor retorna os resultados comparando o cenário real (com perdas) e o potenc
 O projeto segue uma arquitetura modular focada em separação de responsabilidades e rigor técnico:
 
 - **`core/`**: O coração do ecossistema. Contém os motores de física (`perez_engine.py`) e de geometria solar/sombras (`shadow_engine.py`).
-- **`benchmarks/`**: O centro de garantia de qualidade. Contém o `auditor.py` e scripts para execução de auditorias técnicas e validação de precisão.
-- **`services/`**: Camada de infraestrutura para comunicação com a NASA POWER e repositórios de dados climatológicos.
+- **`benchmarks/`**: O centro de garantia de qualidade. Contém o `auditor.py`, scripts de precisão científica (`engine_vs_pvlib.py`) e os relatórios técnicos gerados na pasta `documents/`.
+- **`services/`**: Camada de infraestrutura e dados. Contém o `solar_repository.py` (lógica de fallback) e a subpasta `providers/`, que gerencia a comunicação com NASA POWER, INPE/LABREN (via Parquet) e PVGIS.
 - **`schemas/`**: Contratos de dados (Pydantic V2) que garantem a integridade das requisições e a tipagem rigorosa da API.
-- **`tests/fixtures/`**: Dados de referência imutáveis (Gabarito CRESESB) utilizados para validar a física do motor contra padrões reais.
-- **`data/`**: Pasta destinada aos arquivos de localidades e saída dos relatórios de auditoria em `.csv`.
-- **`utils/`**: Ferramentas utilitárias, como o `exporter.py` (otimizado para Excel BR) e constantes técnicas de albedo e células.
+- **`tests`**: Suíte completa de testes automatizados organizada em `unit/` (motores), `integration/` (fluxo de dados e APIs) e `fixtures/` (dados reais do CRESESB/SunData).
+- **`data/`**: Pasta destinada a dados estáticos, como o catálogo de `localidades.json` e a base consolidada do INPE/LABREN em formato `.parquet`.
+- **`utils/`**: Ferramentas utilitárias, como o `exporter.py` (otimizado para relatórios) e o `constants.py` com parâmetros técnicos de albedo e coeficientes térmicos.
 - **`api.py`**: Ponto de entrada FastAPI com documentação automática e suporte a processamento em lote.
 - **`dashboard.py`**: Interface visual analítica desenvolvida em Streamlit para visualização de curvas e comparação de cenários.
 
@@ -137,6 +138,28 @@ A tabela abaixo compara o HSP base (inclinação 0°) do SunData com a previsão
 > [!TIP]
 > A precisão de 0.00% em latitudes próximas ao equador demonstra que a implementação do modelo de transposição está perfeitamente alinhada com os padrões de mercado.
 
+## 📊 Validação Científica (Benchmarks)
+
+O motor de cálculo é submetido a auditorias rigorosas contra dados reais do **SunData/CRESESB**, garantindo confiabilidade técnica superior às bibliotecas genéricas de mercado.
+
+| Métrica | Resultado |
+| :--- | :--- |
+| **Erro Médio Absoluto (EMA)** | **0.72%** |
+| **Comparativo Indústria (vs pvlib)** | Supera em precisão para cenários brasileiros (EMA 3.51%) |
+| **Fontes de Dados** | Global (NASA/PVGIS) + Alta Resolução Brasil (INPE/LABREN) |
+
+> [!TIP]
+> Você pode gerar o relatório de precisão atualizado rodando: `python -m benchmarks.engine_vs_pvlib`
+
+---
+
+## 🧪 Qualidade de Software e QA
+
+O projeto mantém uma suíte de **45 testes automatizados** (Unitários e Integração) que garantem a estabilidade do sistema:
+* **Integridade de Provedores:** Testes automáticos validam a comunicação real com NASA e PVGIS.
+* **Consistência de Fallback:** Garante que o sistema alterne entre bases locais (INPE) e globais sem interrupção.
+* **Geographical Stress Test:** Validação matemática em múltiplas latitudes e hemisférios.
+
 ---
 
 ## 🧪 Como Executar as Auditorias (Benchmarks)
@@ -147,7 +170,11 @@ O sistema conta com um **Solar Auditor** dedicado que valida tanto a física de 
 
 2. Execute a bateria completa de auditoria:
 ```bash
+# Auditoria de Sombras e Obstruções
 python -m benchmarks.run_benchmarks
+
+# Auditoria Científica de Precisão (Engine vs PVLib/CRESESB)
+python -m benchmarks.engine_vs_pvlib
 ```
 
 ### O que o sistema atesta:
