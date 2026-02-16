@@ -1,4 +1,6 @@
 from fastapi import Body, Depends, FastAPI, HTTPException
+from core.perez_engines.perez_engine_base import BasePerezEngine
+from core.solar_engine_factory import SolarEngineFactory
 from services import Dependencies
 from schemas.schemas import ProjetoSolarRequest, ProjetoSolarResponse, ProjetoArranjoRequest, ArranjoSolarResponse
 from core.app import SolarEngine
@@ -13,6 +15,9 @@ app = FastAPI(
 def get_engine():
     repo = Dependencies.get_solar_repository()
     return SolarEngine(repository=repo)
+
+def get_perez_engine():
+    return SolarEngineFactory.get_engine()
 
 @app.post("/calcular", response_model=ProjetoSolarResponse, summary="Calcula HSP Corrigido",
     description="Calcula a média de HSP considerando inclinação, azimute, ganho bifacial e sombras."
@@ -63,27 +68,32 @@ def post_hsp(
             }
         }
     ),
-    engine: SolarEngine = Depends(get_engine)
+    engine: SolarEngine = Depends(get_engine),
+    perez_engine: BasePerezEngine = Depends(get_perez_engine)
 ):
     try:
         # Lógica de extração do obstáculo
         config_sombra = None
         if dados.config_obstaculo and dados.config_obstaculo.altura_obstaculo > 0:
             config_sombra = dados.config_obstaculo.model_dump()
+            
+        perezEngine = perez_engine(
+            lat=dados.latitude,
+            lon=dados.longitude,
+            inclinacao_deg=dados.inclinacao_graus,
+            azimute_deg=dados.azimute_graus,
+            is_bifacial=dados.is_bifacial,
+            tecnologia_celula=dados.tecnologia_celula,
+            albedo=dados.albedo_solo,
+            altura_instalacao=dados.distancia_centro_modulo_chao,
+            comprimento_modulo=dados.comprimento_modulo,
+            largura_modulo=dados.largura_modulo,
+            orientacao=dados.orientacao
+        )
 
         # Chamada do core
         res = engine.calcular_projeto_solar(
-            lat=dados.latitude, 
-            lon=dados.longitude, 
-            inclinacao=dados.inclinacao_graus, 
-            azimute=dados.azimute_graus, 
-            albedo=dados.albedo_solo, 
-            altura_instalacao=dados.distancia_centro_modulo_chao, 
-            tecnologia=dados.tecnologia_celula,
-            is_bifacial=dados.is_bifacial,
-            comprimento_modulo=dados.comprimento_modulo,
-            largura_modulo=dados.largura_modulo,
-            orientacao=dados.orientacao,
+            perez_engine=perezEngine,
             config_obstaculo=config_sombra,
             formato="dict"
         )
@@ -274,17 +284,19 @@ def post_arranjo(
             }
         }
     ),
-    engine: SolarEngine = Depends(get_engine)    
+    solar_engine: SolarEngine = Depends(get_engine),
+    perez_engine: BasePerezEngine = Depends(get_perez_engine)
 ):
     """
     Analisa múltiplas placas/fileiras para a mesma coordenada.
     Mantém a otimização de UMA chamada à API da NASA para todo o lote.
     """
     try:
-        resultados = engine.calcular_arranjo_completo(
+        resultados = solar_engine.calcular_arranjo_completo(
             lat=dados.latitude, 
-            lon=dados.longitude, 
-            itens=dados.itens
+            lon=dados.longitude,
+            itens=dados.itens,
+            perez_engine_class=perez_engine
         )
         
         return {

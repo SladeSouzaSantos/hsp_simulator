@@ -4,7 +4,7 @@ import pvlib
 import numpy as np
 import csv
 from datetime import datetime
-from core.perez_engine import PerezEngine
+from core.perez_engines.perez_engine import PerezEngine
 
 def run_mass_comparison():
     # 1. Carregar Dados da Fixture
@@ -12,8 +12,12 @@ def run_mass_comparison():
         fixtures = json.load(f)
     
     coordenadas = {
-        "Natal": -5.79, "Caico": -6.45, "Petrolina": -9.38,
-        "Manaus": -3.11, "Porto Alegre": -30.03, "Sao Jose dos Campos": -23.17
+        "Natal": {"lat": -5.79, "lon": -35.21},
+        "Caico": {"lat": -6.45, "lon": -37.09},
+        "Petrolina": {"lat": -9.38, "lon": -40.50},
+        "Manaus": {"lat": -3.11, "lon": -60.02},
+        "Porto Alegre": {"lat": -30.03, "lon": -51.23},
+        "Sao Jose dos Campos": {"lat": -23.17, "lon": -45.88}
     }
 
     report_data = []
@@ -28,7 +32,8 @@ def run_mass_comparison():
     print("-" * 85)
 
     for cidade, dados_cidade in fixtures.items():
-        lat = coordenadas.get(cidade, 0)
+        lat = coordenadas.get(cidade, 0)["lat"]
+        lon = coordenadas.get(cidade, 0)["lon"]
         ghi_mensal = [v for k, v in dados_cidade["0"].items() if k != "Anual"]
         
         for incl, valores in dados_cidade.items():
@@ -50,7 +55,7 @@ def run_mass_comparison():
             hsp_pvlib = np.mean(pv_results)
 
             # --- CÁLCULO SUA ENGINE ---
-            engine = PerezEngine(lat=lat, is_bifacial=False)
+            engine = PerezEngine(lat=lat, lon=lon, is_bifacial=False)
             dados_in = {'hsp_global': ghi_mensal, 'hsp_diffuse': [g*0.3 for g in ghi_mensal]}
             res_eng = engine.calcular_hsp_corrigido_inc_azi(dados_in, incl_int, 0)
             hsp_eng = res_eng['media_sem_sombra']

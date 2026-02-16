@@ -1,11 +1,12 @@
 import pytest
 import numpy as np
-from core.perez_engine import PerezEngine
+from core.perez_engines.perez_engine import PerezEngine
 
 @pytest.fixture
 def base_params():
     return {
         "lat": -7.0,
+        "lon": -35.0,
         "is_bifacial": True,
         "fator_bifacial": 0.8,
         "albedo": 0.2,

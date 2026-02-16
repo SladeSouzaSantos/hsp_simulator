@@ -1,5 +1,5 @@
 import pytest
-from core.shadow_engine import ShadowEngine
+from core.perez_engines.shadow_engine import ShadowEngine
 
 @pytest.fixture
 def engine():

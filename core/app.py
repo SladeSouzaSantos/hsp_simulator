@@ -1,22 +1,18 @@
 import json
-from services.providers import NasaPowerProvider
+from typing import Type
+from core.perez_engines.perez_engine_base import BasePerezEngine
 from services.solar_repository import SolarRepository
-from core.perez_engine import PerezEngine
-from utils.constants import CELL_TECHNOLOGY_REFERENCE
+
 
 class SolarEngine:
     def __init__(self, repository: SolarRepository):
         self.repository = repository
     
-    def calcular_projeto_solar(self,
-            lat, lon, inclinacao, azimute, albedo=0.2, altura_instalacao=0.15, 
-            tecnologia="TOPCON", 
-            orientacao="Retrato",
-            is_bifacial=True, 
-            comprimento_modulo=2.278,
-            largura_modulo=1.134,
+    def calcular_projeto_solar(
+            self,
+            perez_engine: BasePerezEngine,
             dados_pre_carregados=None, 
-            config_obstaculo=None, 
+            config_obstaculo=None,
             formato="dict"):
         """
         Função principal para cálculo de HSP (Horas de Sol Pleno) com suporte a ganho bifacial.
@@ -45,35 +41,24 @@ class SolarEngine:
         """
         
         # 1. Obtém os dados climatológicos (HSP, temperatura, etc.)
+        print("Obtendo dados climatológicos...")
         if dados_pre_carregados is not None:
             dados_climatologicos = dados_pre_carregados
         else:
-            dados_climatologicos = self.repository.get_standardized_data(lat=lat, lon=lon)
+            dados_climatologicos = self.repository.get_standardized_data(lat=perez_engine.lat, lon=perez_engine.lon)
+                
+        # 2. Executa o cálculo
+        print("Executando cálculo de HSP...")
+        resultado = perez_engine.calcular_hsp_corrigido_inc_azi(dados_climatologicos, config_obstaculo=config_obstaculo)
         
-        # 2. Configura o Método de Cálculo
-        fator_bifacial = CELL_TECHNOLOGY_REFERENCE.get(tecnologia, {}).get("fator_conservador", 0.70)
-        
-        metodo_calculo = PerezEngine(
-            lat=lat, 
-            is_bifacial=is_bifacial, 
-            fator_bifacial=fator_bifacial, 
-            albedo=albedo, 
-            altura_instalacao=altura_instalacao,
-            largura_modulo=largura_modulo,
-            comprimento_modulo=comprimento_modulo,
-            orientacao=orientacao
-        )
-        
-        # 3. Executa o cálculo
-        resultado = metodo_calculo.calcular_hsp_corrigido_inc_azi(dados_climatologicos, inclinacao, azimute, config_obstaculo=config_obstaculo)
-        
-        # 4. Formata o retorno
+        # 3. Formata o retorno
+        print("Formatando resultado...")
         if formato == "json":
             return json.dumps(resultado, indent=4, ensure_ascii=False)
         
         return resultado
     
-    def calcular_arranjo_completo(self, lat, lon, itens):
+    def calcular_arranjo_completo(self, lat, lon, itens, perez_engine_class: Type[BasePerezEngine]):
         """
         Lógica de processamento em lote movida do api.py para o Core.
         """
@@ -87,18 +72,22 @@ class SolarEngine:
         for item in itens:
 
             # Chama o core injetando os dados_pre_carregados e as configs do item
-            res = self.calcular_projeto_solar(
+            perezEngine = perez_engine_class(
                 lat=lat,
                 lon=lon,
-                inclinacao=item.inclinacao_graus,
-                azimute=item.azimute_graus,
+                inclinacao_deg=item.inclinacao_graus,
+                azimute_deg=item.azimute_graus,
+                is_bifacial=item.is_bifacial,
+                tecnologia_celula=item.tecnologia_celula,
                 albedo=item.albedo_solo,
                 altura_instalacao=item.distancia_centro_modulo_chao,
-                tecnologia=item.tecnologia_celula,
-                is_bifacial=item.is_bifacial,
                 comprimento_modulo=item.comprimento_modulo,
                 largura_modulo=item.largura_modulo,
-                orientacao=item.orientacao,
+                orientacao=item.orientacao
+            )
+            
+            res = self.calcular_projeto_solar(
+                perez_engine=perezEngine,
                 dados_pre_carregados=dados_cache_api,
                 config_obstaculo=item.config_obstaculo.model_dump() if item.config_obstaculo else None
             )

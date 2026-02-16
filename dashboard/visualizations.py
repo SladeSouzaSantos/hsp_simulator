@@ -6,11 +6,11 @@ import numpy as np
 from datetime import datetime
 import math
 
-from core.perez_engine import PerezEngine
+from core.app import SolarEngine
 from services.solar_repository import SolarRepository
 
 class SolarDashboardRenderer:
-    def __init__(self, engine: PerezEngine, repository: SolarRepository):
+    def __init__(self, engine: SolarEngine, repository: SolarRepository):
         """
         Injetamos as dependências necessárias para o Dashboard funcionar.
         """
