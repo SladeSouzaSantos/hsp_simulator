@@ -7,17 +7,17 @@ import numpy as np
 from datetime import datetime
 from typing import Type
 from core.app import SolarEngine
-from core.perez_engines.perez_engine_base import BasePerezEngine
+from core.solar_engine_factory import SolarPerezEngineFactory
 from services.solar_repository import SolarRepository
 
 class SolarDashboardRenderer:
-    def __init__(self, engine: SolarEngine, repository: SolarRepository, perez_engine_type: Type[BasePerezEngine]):
+    def __init__(self, engine: SolarEngine, repository: SolarRepository):
         """
         Injetamos as dependências necessárias para o Dashboard funcionar.
         """
         self.engine = engine
         self.repository = repository
-        self.perez_engine_type = perez_engine_type
+        self.perez_engine_type = SolarPerezEngineFactory.get_engine_type()
 
     def calcular_posicoes(self, lat, altura, dia_ano, hora):
         """Calcula a física da sombra e a posição do sol (Azimute e Altitude)."""

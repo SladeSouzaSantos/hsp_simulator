@@ -11,10 +11,9 @@ from utils.constants import ALBEDO_REFERENCE, CELL_TECHNOLOGY_REFERENCE
 
 repo = Dependencies.get_solar_repository()
 engine = SolarEngine(repository=repo)
-perez_engine_type = SolarPerezEngineFactory.get_engine_type()
 
 # Inicializa o renderizador injetando as dependências
-renderer = SolarDashboardRenderer(engine=engine, repository=repo, perez_engine_type=perez_engine_type)
+renderer = SolarDashboardRenderer(engine=engine, repository=repo)
 
 # --- CARREGAMENTO DE LOCALIDADES ---
 @st.cache_data

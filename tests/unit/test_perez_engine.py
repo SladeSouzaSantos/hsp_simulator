@@ -8,11 +8,12 @@ def base_params():
         "lat": -7.0,
         "lon": -35.0,
         "is_bifacial": True,
-        "fator_bifacial": 0.8,
         "albedo": 0.2,
         "altura_instalacao": 1.0,
         "comprimento_modulo": 2.278,
-        "largura_modulo": 1.134
+        "largura_modulo": 1.134,
+        "inclinacao_deg": 15,
+        "azimute_deg": 0
     }
 
 def test_ganho_bifacial_zero_quando_desativado(base_params):
@@ -31,13 +32,16 @@ def test_ganho_bifacial_zero_quando_desativado(base_params):
     }
 
     # ORDEM CORRETA: (dados, inclinacao, azimute)
-    output_mono = engine_mono.calcular_hsp_corrigido_inc_azi(dados_12_meses, 15, 0)
-    output_bi = engine_bi.calcular_hsp_corrigido_inc_azi(dados_12_meses, 15, 0)
+    output_mono = engine_mono.calcular_hsp_corrigido_inc_azi(dados_12_meses)
+    output_bi = engine_bi.calcular_hsp_corrigido_inc_azi(dados_12_meses)
 
     assert output_bi["media"] > output_mono["media"], "O ganho bifacial deveria aumentar a média"
 
 def test_perez_com_inclinacao_zero(base_params):
+    base_params["inclinacao_deg"] = 0
+    
     engine = PerezEngine(**base_params)
+
     hsp_referencia = 6.0
     
     dados_12_meses = {
@@ -49,9 +53,7 @@ def test_perez_com_inclinacao_zero(base_params):
 
     # Usando argumentos nomeados para não ter erro de ordem
     res = engine.calcular_hsp_corrigido_inc_azi(
-        dados=dados_12_meses, 
-        inclinacao_deg=0, 
-        azimute_deg=0
+        dados=dados_12_meses,
     )
     
     # Com inclinação 0 e bifacial ativo, a média deve ser no mínimo o valor horizontal
