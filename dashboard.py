@@ -2,6 +2,7 @@ import json
 import streamlit as st
 from datetime import datetime
 from core.app import SolarEngine
+from core.solar_engine_factory import SolarPerezEngineFactory
 from dashboard.visualizations import SolarDashboardRenderer
 from services.deps import Dependencies
 from utils.constants import ALBEDO_REFERENCE, CELL_TECHNOLOGY_REFERENCE
@@ -10,9 +11,10 @@ from utils.constants import ALBEDO_REFERENCE, CELL_TECHNOLOGY_REFERENCE
 
 repo = Dependencies.get_solar_repository()
 engine = SolarEngine(repository=repo)
+perez_engine_type = SolarPerezEngineFactory.get_engine_type()
 
 # Inicializa o renderizador injetando as dependências
-renderer = SolarDashboardRenderer(engine=engine, repository=repo)
+renderer = SolarDashboardRenderer(engine=engine, repository=repo, perez_engine_type=perez_engine_type)
 
 # --- CARREGAMENTO DE LOCALIDADES ---
 @st.cache_data

@@ -1,6 +1,6 @@
 from fastapi import Body, Depends, FastAPI, HTTPException
 from core.perez_engines.perez_engine_base import BasePerezEngine
-from core.solar_engine_factory import SolarEngineFactory
+from core.solar_engine_factory import SolarPerezEngineFactory
 from services import Dependencies
 from schemas.schemas import ProjetoSolarRequest, ProjetoSolarResponse, ProjetoArranjoRequest, ArranjoSolarResponse
 from core.app import SolarEngine
@@ -17,7 +17,7 @@ def get_engine():
     return SolarEngine(repository=repo)
 
 def get_perez_engine():
-    return SolarEngineFactory.get_engine()
+    return SolarPerezEngineFactory.get_engine_type()
 
 @app.post("/calcular", response_model=ProjetoSolarResponse, summary="Calcula HSP Corrigido",
     description="Calcula a média de HSP considerando inclinação, azimute, ganho bifacial e sombras."

@@ -1,6 +1,6 @@
 from .app import SolarEngine
-from .solar_engine_factory import SolarEngineFactory
+from .solar_engine_factory import SolarPerezEngineFactory
 from .perez_engines import BasePerezEngine, PerezEngine, PerezEnginePVLib
 
 
-__all__ = ["SolarEngine", "SolarEngineFactory", "PerezEngine", "PerezEnginePVLib", "BasePerezEngine"]
+__all__ = ["SolarEngine", "SolarPerezEngineFactory", "PerezEngine", "PerezEnginePVLib", "BasePerezEngine"]

@@ -77,11 +77,25 @@ class PerezEnginePVLib(BasePerezEngine):
 
         # Parâmetros astronômicos para a função de sombra
         day_of_year = times.dayofyear
+        
         # Declinação e ângulo horário do pôr do sol
         delta = np.radians(23.45 * np.sin(np.radians(360/365 * (284 + day_of_year))))
+
+        # Cálculo do ângulo horário do pôr do sol para o dia médio de cada mês
+        beta = np.radians(self.inclinacao_deg)
+        gamma = np.radians(self.azimute_deg)
+        
+        # Cálculo do ângulo horário do pôr do sol (ws) para cada mês
         ws = np.arccos(-np.tan(self.lat_rad) * np.tan(delta))
 
         for i in range(12):
+            # Cálculo do fator de inclinação (rb) para o mês i
+            num = (np.sin(self.lat_rad)*np.cos(beta) + np.cos(self.lat_rad)*np.sin(beta)*np.cos(gamma))*np.sin(delta[i])*ws[i] + \
+                  (np.cos(self.lat_rad)*np.cos(beta) - np.sin(self.lat_rad)*np.sin(beta)*np.cos(gamma))*np.cos(delta[i])*np.sin(ws[i]) - \
+                  (np.sin(beta)*np.sin(gamma))*np.cos(delta[i])*(1-np.cos(ws[i]))
+            den = np.sin(self.lat_rad)*np.sin(delta[i])*ws[i] + np.cos(self.lat_rad)*np.cos(delta[i])*np.sin(ws[i])
+            rb_valor = float(num / den)
+
             # A. Obtém o fator de perda do mês (ex: 0.05 para 5% de perda)
             f_sombra = self._obter_fator_perda_sombra(delta[i], ws[i], config_obstaculo)
             perdas_sombreamento.append(f_sombra)
@@ -94,11 +108,26 @@ class PerezEnginePVLib(BasePerezEngine):
                                  irrad['poa_ground_diffuse'].iloc[i]
 
             # C. Ganho Bifacial (usando a mesma lógica da Base)
-            ganho_traseiro = 0
+            ganho_traseiro = 0            
             if self.is_bifacial:
-                fator_view = min(1.0, self.altura_instalacao / (self.altura_instalacao + 0.05))
-                ganho_traseiro = irrad['poa_ground_diffuse'].iloc[i] * self.fator_bifacial * fator_view
+                # 1. Componente Direta na Traseira (Beam Rear)
+                # O PVLib fornece o 'poa_direct' para a frente. 
+                # Para a traseira, usamos o componente reverso do rb
+                h_beam_rear = (dni_mensal.iloc[i] * max(0, -rb_valor)) * (1 - f_sombra)
 
+                # 2. Componente Difusa do Céu na Traseira (Sky Diffuse Rear)
+                # Um painel inclinado vê uma fração (1 - cos(beta))/2 do céu pela traseira
+                h_diff_rear = dhi_mensal[i] * (1 - np.cos(beta)) / 2
+
+                # 3. Componente Refletida do Solo (Ground Reflected)
+                # Usamos o seu cálculo de Fator de Vista (VF) para paridade total
+                ratio = self.altura_instalacao / self.dimensao_referencia_modulo
+                vf_ground = (ratio / np.sqrt(ratio**2 + 1))
+                h_refl_rear = ghi_mensal[i] * self.albedo * vf_ground * 0.95
+
+                # 4. Total Traseiro com Fator Bifacial
+                ganho_traseiro = (h_beam_rear + h_diff_rear + h_refl_rear) * self.fator_bifacial
+            
             res_bruto.append(float(frontal_sem_sombra + ganho_traseiro))
             res_liquido.append(float(frontal_com_sombra + ganho_traseiro))
 

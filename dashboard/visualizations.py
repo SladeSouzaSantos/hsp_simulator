@@ -1,21 +1,23 @@
+import math
 import streamlit as st
 import pandas as pd
 import altair as alt
 import plotly.graph_objects as go
 import numpy as np
 from datetime import datetime
-import math
-
+from typing import Type
 from core.app import SolarEngine
+from core.perez_engines.perez_engine_base import BasePerezEngine
 from services.solar_repository import SolarRepository
 
 class SolarDashboardRenderer:
-    def __init__(self, engine: SolarEngine, repository: SolarRepository):
+    def __init__(self, engine: SolarEngine, repository: SolarRepository, perez_engine_type: Type[BasePerezEngine]):
         """
         Injetamos as dependências necessárias para o Dashboard funcionar.
         """
         self.engine = engine
         self.repository = repository
+        self.perez_engine_type = perez_engine_type
 
     def calcular_posicoes(self, lat, altura, dia_ano, hora):
         """Calcula a física da sombra e a posição do sol (Azimute e Altitude)."""
@@ -66,22 +68,40 @@ class SolarDashboardRenderer:
         # 2. Execução dos Cálculos (Dois Cenários)
         with st.spinner("Calculando modelos..."):
             # Cenário A: Seu Projeto
-            res_projeto = self.engine.calcular_projeto_solar(
-                lat=lat, lon=lon, inclinacao=inc, azimute=azi, 
-                albedo=alb, altura_instalacao=h, tecnologia=tec_chave, 
+            perez_engine_projeto = self.perez_engine_type(
+                lat=lat_fixed,
+                lon=lon_fixed,
+                inclinacao_deg=inc,
+                azimute_deg=azi,
                 is_bifacial=modo_bifacial,
+                tecnologia_celula=tec_chave,
+                albedo=alb,
+                altura_instalacao=h,
+                orientacao=orientacao
+            )
+
+            res_projeto = self.engine.calcular_projeto_solar(
+                perez_engine=perez_engine_projeto,
                 dados_pre_carregados=dados_clima,
-                orientacao=orientacao,
                 config_obstaculo=config_obstaculo
             )
-            
+
             # Cenário B: Padrão (Inclinação 0, Azimute 0)
-            res_padrao = self.engine.calcular_projeto_solar(
-                lat=lat, lon=lon, inclinacao=0, azimute=0, 
-                albedo=alb, altura_instalacao=h, tecnologia=tec_chave, 
+            perez_engine_padrao = self.perez_engine_type(
+                lat=lat_fixed,
+                lon=lon_fixed,
+                inclinacao_deg=0,
+                azimute_deg=0,
                 is_bifacial=modo_bifacial,
+                tecnologia_celula=tec_chave,
+                albedo=alb,
+                altura_instalacao=h,
+                orientacao=orientacao
+            )
+            
+            res_padrao = self.engine.calcular_projeto_solar(
+                perez_engine=perez_engine_padrao,
                 dados_pre_carregados=dados_clima,
-                orientacao=orientacao,
                 config_obstaculo=None
             )
             
