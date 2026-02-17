@@ -11,7 +11,6 @@ class SolarRepository:
     def _fetch_from_provider(self, provider: SolarDataProvider, lat: float, lon: float):
         """Método privado para execução segura e padronização de logs."""
         try:
-            print(f"[Repository] Tentando provedor: {provider.name}")
             return provider.get_solar_data(lat, lon)
         except Exception as e:
             print(f"[Repository] Falha no {provider.name}: {e}")

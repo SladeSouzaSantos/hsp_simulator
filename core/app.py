@@ -41,18 +41,15 @@ class SolarEngine:
         """
         
         # 1. Obtém os dados climatológicos (HSP, temperatura, etc.)
-        print("Obtendo dados climatológicos...")
         if dados_pre_carregados is not None:
             dados_climatologicos = dados_pre_carregados
         else:
             dados_climatologicos = self.repository.get_standardized_data(lat=perez_engine.lat, lon=perez_engine.lon)
                 
         # 2. Executa o cálculo
-        print("Executando cálculo de HSP...")
         resultado = perez_engine.calcular_hsp_corrigido_inc_azi(dados_climatologicos, config_obstaculo=config_obstaculo)
         
         # 3. Formata o retorno
-        print("Formatando resultado...")
         if formato == "json":
             return json.dumps(resultado, indent=4, ensure_ascii=False)
         

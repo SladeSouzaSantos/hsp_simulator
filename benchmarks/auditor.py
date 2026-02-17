@@ -2,6 +2,7 @@ import os
 import json
 import pandas as pd
 from core.app import SolarEngine
+from core.solar_engine_factory import SolarPerezEngineFactory
 from services.providers import InpeLabrenProvider, NasaPowerProvider, PvgisProvider
 from tests.test_scenarios import SCENARIOS
 
@@ -13,13 +14,9 @@ class SolarAuditor:
         cenario = SCENARIOS["validacao_sombra"]
         print(f"🚀 Iniciando Auditoria: {cenario['descricao']}")
         
-        # 1. Pré-carrega dados (Otimização que validamos nos testes)
-        cache_clima = self.engine.repository.get_standardized_data(lat, lon)
-        
         resultados_csv = []
         
         for caso in cenario["casos"]:
-            # Prepara a config de obstáculo para o motor
             config = {
                 "altura_obstaculo": caso["h_obs"],
                 "distancia_obstaculo": caso["d_obs"],
@@ -27,26 +24,28 @@ class SolarAuditor:
                 "largura_obstaculo": 10.0
             } if caso["h_obs"] > 0 else None
 
-            # Executa o cálculo usando o motor oficial
+            # CORREÇÃO: Instancia o motor com os parâmetros fixos do teste
+            perez_type = SolarPerezEngineFactory.get_engine_type()
+            inc_cenario = caso.get("inclinacao_painel", 15)
+            azi_cenario = caso.get("azimute_painel", 0)
+            perez = perez_type(lat=lat, lon=lon, inclinacao_deg=inc_cenario, azimute_deg=azi_cenario)
+
+            # Executa o cálculo injetando o motor configurado
             res = self.engine.calcular_projeto_solar(
-                lat=lat, lon=lon,
-                inclinacao=15, azimute=0,
-                dados_pre_carregados=cache_clima,
+                perez_engine=perez,
                 config_obstaculo=config
             )
-
-            # Formata para o CSV
+            
             resultados_csv.append({
-                "Cenário": caso["label"],
-                "H_Obs": caso["h_obs"],
+                "Cenario": caso.get("nome", f"H{caso['h_obs']} D{caso['d_obs']}"), # Usa a altura e distância como nome se 'nome' faltar
+                "H_Obstaculo": caso["h_obs"],
                 "D_Obs": caso["d_obs"],
                 "HSP_Liquido": res["media"],
-                "HSP_Bruto": res["media_sem_sombra"],
-                "Perda_%": res["perda_sombreamento_estimada"]
+                "Perda_Sombra": res["perda_sombreamento_estimada"]
             })
-            
+
         return resultados_csv
-    
+
     def validar_transposicao_cresesb(self):
         """
         Valida o fator de ganho geométrico comparando com a amostragem do SunData (CRESESB).
@@ -68,6 +67,8 @@ class SolarAuditor:
 
         print(f"\n{'CIDADE':<15} | {'ANG':>3} | {'ESTIMADO':>10} | {'REAL':>10} | {'DIFERENÇA'}")
         print("-" * 65)
+
+        perez_type = SolarPerezEngineFactory.get_engine_type()
 
         results = []
 
@@ -91,8 +92,7 @@ class SolarAuditor:
             
             # Cálculo simulado 0° para achar o fator de escala
             sim_0 = self.engine.calcular_projeto_solar(
-                coords['latitude'], coords['longitude'], 
-                inclinacao=0, azimute=0, is_bifacial=False,
+                perez_engine=perez_type(lat=coords['latitude'], lon=coords['longitude'], inclinacao_deg=0, azimute_deg=0, is_bifacial=False),
                 dados_pre_carregados=dados_clima
             )["media"]
 
@@ -102,8 +102,7 @@ class SolarAuditor:
 
                 # Cálculo simulado no ângulo alvo
                 sim_alvo = self.engine.calcular_projeto_solar(
-                    coords['latitude'], coords['longitude'], 
-                    inclinacao=inc, azimute=0, is_bifacial=False,
+                    perez_engine=perez_type(lat=coords['latitude'], lon=coords['longitude'], inclinacao_deg=inc, azimute_deg=0, is_bifacial=False),
                     dados_pre_carregados=dados_clima
                 )["media"]
                 

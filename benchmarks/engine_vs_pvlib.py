@@ -1,16 +1,26 @@
 import json
 import os
-import pvlib
-import numpy as np
 import csv
+import pandas as pd
 from datetime import datetime
-from core.perez_engines.perez_engine import PerezEngine
+from core.app import SolarEngine
+from core.solar_engine_factory import SolarPerezEngineFactory
+from services.deps import Dependencies
 
 def run_mass_comparison():
-    # 1. Carregar Dados da Fixture
-    with open('tests/fixtures/amostragem_sundata.json', 'r', encoding='utf-8') as f:
-        fixtures = json.load(f)
+    # 1. Setup do Ambiente
+    repo = Dependencies.get_solar_repository()
+    # A SolarEngine aqui servirá como orquestradora se necessário
+    main_engine = SolarEngine(repository=repo)
     
+    try:
+        with open('tests/fixtures/amostragem_sundata.json', 'r', encoding='utf-8') as f:
+            fixtures = json.load(f)
+    except FileNotFoundError:
+        print("[ERRO] Fixture SunData não encontrada.")
+        return
+
+    # Cidades para teste de estresse
     coordenadas = {
         "Natal": {"lat": -5.79, "lon": -35.21},
         "Caico": {"lat": -6.45, "lon": -37.09},
@@ -21,93 +31,77 @@ def run_mass_comparison():
     }
 
     report_data = []
-    erros_eng_abs = []
-    erros_pv_abs = []
-
-    header_terminal = (f"{'Cidade':<20} | {'Incl.':<5} | {'SunData':<7} | "
-                       f"{'Eng HSP':<7} | {'PVL HSP':<7} | {'Erro Eng%':<9} | {'Erro PVL%'}")
+    meses_ordem = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
     
-    print("\n" + "="*85)
-    print(header_terminal)
-    print("-" * 85)
+    print("=" * 100)
+    print(f"{'Cidade':<15} | {'Inc':<3} | {'Gabarito':<8} | {'Sua Eng':<8} | {'PVLib':<8} | {'Erro Sua%':<9} | {'Erro PVL%'}")
+    print("-" * 100)
 
-    for cidade, dados_cidade in fixtures.items():
-        lat = coordenadas.get(cidade, 0)["lat"]
-        lon = coordenadas.get(cidade, 0)["lon"]
-        ghi_mensal = [v for k, v in dados_cidade["0"].items() if k != "Anual"]
+    for cidade, coords in coordenadas.items():
+        if cidade not in fixtures: continue
         
-        for incl, valores in dados_cidade.items():
-            if incl == "0": continue 
-            
-            target_sd = valores["Anual"]
-            incl_int = int(incl)
+        # Busca dados reais via Repositório (NASA/INPE)
+        dados_base_0 = fixtures[cidade]["0"]
 
-            # --- CÁLCULO PVLIB ---
-            pv_results = []
-            for ghi in ghi_mensal:
-                dhi, dni = ghi * 0.3, ghi * 0.7
-                res_pv = pvlib.irradiance.get_total_irradiance(
-                    surface_tilt=incl_int, surface_azimuth=0,
-                    solar_zenith=abs(lat - incl_int), solar_azimuth=0,
-                    dni=dni, ghi=ghi, dhi=dhi, dni_extra=1367, model='perez'
-                )
-                pv_results.append(res_pv['poa_global'])
-            hsp_pvlib = np.mean(pv_results)
-
-            # --- CÁLCULO SUA ENGINE ---
-            engine = PerezEngine(lat=lat, lon=lon, is_bifacial=False)
-            dados_in = {'hsp_global': ghi_mensal, 'hsp_diffuse': [g*0.3 for g in ghi_mensal]}
-            res_eng = engine.calcular_hsp_corrigido_inc_azi(dados_in, incl_int, 0)
-            hsp_eng = res_eng['media_sem_sombra']
+        dados_clima = {
+            "hsp_global": [float(dados_base_0[m]) for m in meses_ordem],
+            "hsp_diffuse": [float(dados_base_0[m]) * 0.3 for m in meses_ordem], # Estimativa de difusa
+            "temp_max": [30.0] * 12,
+            "wind_speed": [3.0] * 12
+        }
+        
+        for inc_str, dados_gabarito in fixtures[cidade].items():
+            inc = int(inc_str)
             
-            err_eng = ((hsp_eng / target_sd) - 1) * 100
-            err_pv = ((hsp_pvlib / target_sd) - 1) * 100
-            
-            erros_eng_abs.append(abs(err_eng))
-            erros_pv_abs.append(abs(err_pv))
-            
-            # Armazenar dados para os arquivos
-            item = {
-                "Cidade": cidade, "Incl": f"{incl}°", "SunData": target_sd,
-                "Eng_HSP": round(hsp_eng, 3), "PVL_HSP": round(hsp_pvlib, 3),
-                "Erro_Eng_Pct": round(err_eng, 2), "Erro_PVL_Pct": round(err_pv, 2)
-            }
-            report_data.append(item)
-            
-            print(f"{cidade:<20} | {incl + '°':<5} | {target_sd:<7.2f} | "
-                  f"{hsp_eng:<7.3f} | {hsp_pvlib:<7.3f} | {err_eng:>+9.2f}% | {err_pv:>+9.2f}%")
+            # --- TRATAMENTO DO GABARITO ---
+            if isinstance(dados_gabarito, dict):
+                # Prioriza a chave "Anual" que existe no seu JSON
+                if "Anual" in dados_gabarito:
+                    hsp_real = float(dados_gabarito["Anual"])
+                else:
+                    # Fallback caso a chave mude (calcula média dos meses numéricos)
+                    meses_vals = [v for k, v in dados_gabarito.items() if k != "Anual" and isinstance(v, (int, float))]
+                    hsp_real = sum(meses_vals) / len(meses_vals) if meses_vals else 0
+            else:
+                hsp_real = float(dados_gabarito)
 
-    media_final_eng = np.mean(erros_eng_abs)
-    media_final_pv = np.mean(erros_pv_abs)
+            # --- MOTOR 1: SUA IMPLEMENTAÇÃO (PEREZ NATIVO) ---
+            engine_type = SolarPerezEngineFactory.get_engine_type(motor_type="perez_legacy")
+            my_perez = engine_type(lat=coords['lat'], lon=coords['lon'], inclinacao_deg=inc, azimute_deg=0)
+            res_my = my_perez.calcular_hsp_corrigido_inc_azi(dados_clima)
+            hsp_my = res_my["media"]
 
-    footer = f"ERRO MÉDIO ABSOLUTO:        ENGINE: {media_final_eng:.2f}% | PVLIB: {media_final_pv:.2f}%"
-    print("-" * 85); print(footer); print("=" * 85 + "\n")
+            # --- MOTOR 2: PVLIB WRAPPER ---
+            pvlib_type = SolarPerezEngineFactory.get_engine_type(motor_type="perez_pvlib")
+            pv_perez = pvlib_type(lat=coords['lat'], lon=coords['lon'], inclinacao_deg=inc, azimute_deg=0)
+            res_pv = pv_perez.calcular_hsp_corrigido_inc_azi(dados_clima)
+            hsp_pv = res_pv["media"]
 
-    # --- CONFIGURAÇÃO DE DIRETÓRIO ---
+            # --- CÁLCULO DE ERROS ---
+            erro_my = ((hsp_my - hsp_real) / hsp_real) * 100
+            erro_pv = ((hsp_pv - hsp_real) / hsp_real) * 100
+
+            print(f"{cidade:<15} | {inc:>3}° | {hsp_real:<8.2f} | {hsp_my:<8.2f} | {hsp_pv:<8.2f} | {erro_my:>+8.2f}% | {erro_pv:>+8.2f}%")
+
+            report_data.append({
+                "Cidade": cidade,
+                "Inclinacao": inc,
+                "HSP_SunData": round(hsp_real, 3),
+                "HSP_Minha_Engine": round(hsp_my, 3),
+                "HSP_PVLib": round(hsp_pv, 3),
+                "Erro_Minha_Pct": round(erro_my, 2),
+                "Erro_PVLib_Pct": round(erro_pv, 2)
+            })
+
+    # --- EXPORTAÇÃO ---
     doc_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "documents")
-    if not os.path.exists(doc_dir):
-        os.makedirs(doc_dir)
-
-    nome_base = "RELATORIO_TECNICO_PRECISAO_SOLAR"
+    os.makedirs(doc_dir, exist_ok=True)
+    df = pd.DataFrame(report_data)
+    df.to_csv(os.path.join(doc_dir, "BENCHMARK_ENGINE_VS_PVLIB.csv"), index=False)
     
-    # Exportação CSV
-    with open(os.path.join(doc_dir, f'{nome_base}.csv'), 'w', newline='', encoding='utf-8') as f:
-        writer = csv.DictWriter(f, fieldnames=report_data[0].keys())
-        writer.writeheader()
-        writer.writerows(report_data)
-
-    # Exportação MD
-    with open(os.path.join(doc_dir, f'{nome_base}.md'), 'w', encoding='utf-8') as f:
-        f.write(f"# {nome_base.replace('_', ' ')}\n\n")
-        f.write(f"**Data:** {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}\n\n")
-        f.write(f"- **Erro Médio Engine:** {media_final_eng:.2f}%\n")
-        f.write(f"- **Erro Médio PVLib:** {media_final_pv:.2f}%\n\n")
-        f.write("| Cidade | Incl. | SunData | Eng HSP | PVL HSP | Erro Eng% | Erro PVL% |\n")
-        f.write("| :--- | :---: | :---: | :---: | :---: | :---: | :---: |\n")
-        for r in report_data:
-            f.write(f"| {r['Cidade']} | {r['Incl']} | {r['SunData']} | {r['Eng_HSP']} | {r['PVL_HSP']} | {r['Erro_Eng_Pct']}% | {r['Erro_PVL_Pct']}% |\n")
-
-    print(f"✅ Relatórios científicos gerados em: benchmarks/documents/")
+    print("-" * 100)
+    print(f"📊 Média Erro Absoluto (Sua): {df['Erro_Minha_Pct'].abs().mean():.2f}%")
+    print(f"📊 Média Erro Absoluto (PVLib): {df['Erro_PVLib_Pct'].abs().mean():.2f}%")
 
 if __name__ == "__main__":
     run_mass_comparison()
