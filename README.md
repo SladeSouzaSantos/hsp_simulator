@@ -14,7 +14,7 @@ Este projeto é um ecossistema de alta precisão para simulação de **Horas de 
 * **Ecossistema Híbrido:** API REST (FastAPI) e Dashboard analítico (Streamlit).
   * **API REST (FastAPI):** Endpoints escaláveis com validação Pydantic V2 para integração com CRMs ou softwares de engenharia.
   * **Dashboard (Streamlit):** Interface analítica para visualização de curvas mensais e comparação de cenários.
-* **Sistema de Benchmarking:** Auditoria automatizada que valida a precisão do motor contra dados reais do **SunData (CRESESB)**.
+* **Sistema de Benchmarking:** Auditoria automatizada que valida a precisão do motor contra dados reais do **SunData (CRESESB)** e comparação de precisão entre motores de cálculo (Legacy vs PVLib).
 * **Rigor Técnico:** Validação sistemática contra dados do **SunData (CRESESB)**, mantendo desvios médios globais abaixo de 3%.
 
 ---
@@ -100,10 +100,10 @@ O motor retorna os resultados comparando o cenário real (com perdas) e o potenc
 
 O projeto segue uma arquitetura modular focada em separação de responsabilidades e rigor técnico:
 
-* **`core/`**: O coração do ecossistema. Contém os motores de física (`perez_engine.py`) e de geometria solar/sombras (`shadow_engine.py`).
-* **`benchmarks/`**: O centro de garantia de qualidade. Contém o `auditor.py`, scripts de precisão científica (`engine_vs_pvlib.py`) e os relatórios técnicos gerados na pasta `documents/`.
-* **`services/`**: Camada de infraestrutura e dados. Contém o `solar_repository.py` (lógica de fallback) e a subpasta `providers/`, que gerencia a comunicação com NASA POWER, INPE/LABREN (via Parquet) e PVGIS.
-* **`schemas/`**: Contratos de dados (Pydantic V2) que garantem a integridade das requisições e a tipagem rigorosa da API.
+* **`core/`**: O coração do ecossistema. Contém a `BasePerezEngine`, as implementações do motor (`perez_engine.py` e `perez_engine_pvlib.py`), o motor de sombras (`shadow_engine.py`) e a `SolarPerezEngineFactory` para alternância de modelos.
+* **`benchmarks/`**: Centro de garantia de qualidade científica. Abriga o `auditor.py` (orquestrador de validação), scripts de comparação de precisão (`engine_vs_pvlib.py`, `run_benchmarks.py`) e relatórios técnicos em `documents/`.
+* **`services/`**: Camada de infraestrutura. Gerencia o `solar_repository.py` (lógica de fallback) e os `providers/` (NASA POWER, INPE/LABREN via Parquet e PVGIS). Inclui o `deps.py` para injeção de dependências.
+* **`schemas/`**: Contratos de dados (Pydantic V2) que garantem a integridade das requisições e a tipagem rigorosa da API (ver `schemas.py`).
 * **`tests`**: Suíte completa de testes automatizados organizada em `unit/` (motores), `integration/` (fluxo de dados e APIs) e `fixtures/` (dados reais do CRESESB/SunData).
 * **`data/`**: Pasta destinada a dados estáticos, como o catálogo de `localidades.json` e a base consolidada do INPE/LABREN em formato `.parquet`.
 * **`utils/`**: Ferramentas utilitárias, como o `exporter.py` (otimizado para relatórios) e o `constants.py` com parâmetros técnicos de albedo e coeficientes térmicos.
@@ -168,6 +168,16 @@ O projeto mantém uma suíte de **45 testes automatizados** (Unitários e Integr
 * **Integridade de Provedores:** Testes automáticos validam a comunicação real com NASA e PVGIS.
 * **Consistência de Fallback:** Garante que o sistema alterne entre bases locais (INPE) e globais sem interrupção.
 * **Geographical Stress Test:** Validação matemática em múltiplas latitudes e hemisférios.
+* **Física (Stress Test):** Valida o comportamento do motor em latitudes extremas e inclinações de 0° a 90°.
+
+### 🧪 Como Executar os Testes Automatizados (PyTest)
+
+Executamos testes de unidade e integração para validar cada camada:
+
+```bash
+# Executa a suíte completa de testes
+python -m pytest
+```
 
 ---
 
