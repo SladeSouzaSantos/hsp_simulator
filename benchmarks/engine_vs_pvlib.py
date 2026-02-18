@@ -103,5 +103,70 @@ def run_mass_comparison():
     print(f"📊 Média Erro Absoluto (Sua): {df['Erro_Minha_Pct'].abs().mean():.2f}%")
     print(f"📊 Média Erro Absoluto (PVLib): {df['Erro_PVLib_Pct'].abs().mean():.2f}%")
 
+def run_legacy_vs_pvlib_stress_test():
+    # 1. Configuração de Variáveis e Step
+    step = 5 # Variável de controle de resolução
+    azimutes = range(0, 361, step)
+    inclinacoes = range(0, 91, step)
+    
+    coordenadas = {
+        "Natal": {"lat": -5.79, "lon": -35.21},
+        "Caico": {"lat": -6.45, "lon": -37.09},
+        "Petrolina": {"lat": -9.38, "lon": -40.50},
+        "Manaus": {"lat": -3.11, "lon": -60.02},
+        "Porto Alegre": {"lat": -30.03, "lon": -51.23},
+        "Sao Jose dos Campos": {"lat": -23.17, "lon": -45.88}
+    }
+
+    # 2. Setup do Repositório (NASA POWER)
+    repo = Dependencies.get_solar_repository()
+    report_data = []
+
+    print(f"🚀 Iniciando Comparativo: Legacy vs PVLib | Step: {step}°")
+    print("=" * 90)
+    print(f"{'Cidade':<15} | {'Azi':<4} | {'Inc':<4} | {'Legacy':<8} | {'PVLib':<8} | {'Delta %'}")
+    print("-" * 90)
+
+    for cidade, coords in coordenadas.items():
+        # Busca dados da NASA uma única vez por cidade
+        dados_clima = repo.get_standardized_data(coords['lat'], coords['lon'])
+        
+        for azi in azimutes:
+            for inc in inclinacoes:
+                # --- MOTOR 1: PEREZ LEGACY ---
+                legacy_type = SolarPerezEngineFactory.get_engine_type(motor_type="perez_legacy")
+                engine_legacy = legacy_type(lat=coords['lat'], lon=coords['lon'], inclinacao_deg=inc, azimute_deg=azi)
+                hsp_legacy = engine_legacy.calcular_hsp_corrigido_inc_azi(dados_clima)["media"]
+
+                # --- MOTOR 2: PEREZ PVLIB ---
+                pvlib_type = SolarPerezEngineFactory.get_engine_type(motor_type="perez_pvlib")
+                engine_pvlib = pvlib_type(lat=coords['lat'], lon=coords['lon'], inclinacao_deg=inc, azimute_deg=azi)
+                hsp_pvlib = engine_pvlib.calcular_hsp_corrigido_inc_azi(dados_clima)["media"]
+
+                # Cálculo de divergência entre os motores
+                delta_pct = ((hsp_legacy - hsp_pvlib) / hsp_pvlib) * 100 if hsp_pvlib > 0 else 0
+
+                report_data.append({
+                    "Cidade": cidade,
+                    "Azimute": azi,
+                    "Inclinacao": inc,
+                    "HSP_Legacy": round(hsp_legacy, 3),
+                    "HSP_PVLib": round(hsp_pvlib, 3),
+                    "Divergencia_Pct": round(delta_pct, 2)
+                })
+
+        print(f"✅ {cidade} finalizada.")
+
+    # 3. Exportação para CSV
+    df = pd.DataFrame(report_data)
+    output_path = "benchmarks/documents/COMPARATIVO_LEGACY_VS_PVLIB_NASA.csv"
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    df.to_csv(output_path, index=False)
+
+    print("-" * 90)
+    print(f"📊 Relatório gerado em: {output_path}")
+    print(f"🔍 Divergência Média Global: {df['Divergencia_Pct'].abs().mean():.2f}%")
+
 if __name__ == "__main__":
     run_mass_comparison()
+    run_legacy_vs_pvlib_stress_test()
