@@ -69,23 +69,82 @@ Projetado para processar múltiplas placas (strings ou arranjos complexos) em um
 
 O motor retorna os resultados comparando o cenário real (com perdas) e o potencial teórico (referência):
 
+## POST `/calcular`
+
 ```json
 {
-  "total_placas": 1,
+  "id_placa": "Módulo_Norte_01",
+  "kWh/m²/dia": {
+    "real": {
+      "media": 5.882,
+      "mensal": [5.55, 5.84, 5.99, 5.69, 5.67, 5.10, 5.51, 6.31, 6.57, 6.43, 6.17, 5.72]
+    },
+    "referencia": {
+      "media_sem_sombra": 5.942,
+      "mensal_sem_sombra": [5.62, 5.84, 5.99, 5.76, 5.79, 5.36, 5.62, 6.31, 6.57, 6.43, 6.17, 5.79]
+    }
+  },
+  "clima": {
+    "temp_max_mensal": [31.2, 32.5, 30.8, 29.5, 27.2, 26.5, 26.8, 28.5, 30.1, 31.5, 32.0, 31.8],
+    "temp_avg_mensal": [26.5, 27.2, 26.1, 24.8, 23.1, 22.4, 22.7, 23.9, 25.4, 26.8, 27.1, 26.9],
+    "temp_min_mensal": [21.8, 22.1, 21.5, 20.2, 18.5, 17.8, 18.1, 19.4, 20.8, 22.1, 22.5, 22.2]
+  },
+  "perda_sombreamento_estimada": "1.6%"
+}
+```
+
+## POST `/calcular-arranjo`
+
+```json
+{
+  "total_placas": 3,
+  "clima": {
+    "temp_max_mensal": [29.96, 30.13, 30.48, 30.37, 30.05, 29.59, 28.51, 28.17, 28.36, 29.01, 29.12, 29.39],
+    "temp_avg_mensal": [27.38, 27.69, 27.85, 27.77, 27.48, 26.71, 25.99, 25.8, 26.03, 26.54, 26.97, 27.31],
+    "temp_min_mensal": [24.54, 24.03, 25.2, 25.23, 25.08, 23.14, 23.16, 23.08, 23.53, 24.58, 24.93, 25.36]
+  },
   "resultados": [
     {
-      "id_placa": "Módulo_Norte_01",
+      "id_placa": "Fileira_Norte_01",
       "kWh/m²/dia": {
         "real": {
-          "media": 5.882,
-          "mensal": [5.55, 5.84, 5.99, 5.69, 5.67, 5.10, 5.51, 6.31, 6.57, 6.43, 6.17, 5.72]
+          "media": 5.687,
+          "mensal": [5.092, 5.846, 5.99, 5.691, 5.709, 5.292, 5.629, 6.312, 6.576, 6.439, 6.031, 3.633]
         },
         "referencia": {
           "media_sem_sombra": 5.942,
-          "mensal_sem_sombra": [5.62, 5.84, 5.99, 5.76, 5.79, 5.36, 5.62, 6.31, 6.57, 6.43, 6.17, 5.79]
+          "mensal_sem_sombra": [5.62, 5.846, 5.99, 5.767, 5.79, 5.367, 5.629, 6.312, 6.576, 6.439, 6.172, 5.794]
         }
       },
-      "perda_sombreamento_estimada": "1.6%"
+      "perda_sombreamento_estimada": "6.9%"
+    },
+    {
+      "id_placa": "Fileira_Central",
+      "kWh/m²/dia": {
+        "real": {
+          "media": 4.455,
+          "mensal": [4.743, 4.734, 4.58, 4.18, 3.92, 3.575, 3.742, 4.306, 4.766, 4.976, 5.042, 4.9]
+        },
+        "referencia": {
+          "media_sem_sombra": 4.455,
+          "mensal_sem_sombra": [4.743, 4.734, 4.58, 4.18, 3.92, 3.575, 3.742, 4.306, 4.766, 4.976, 5.042, 4.9]
+        }
+      },
+      "perda_sombreamento_estimada": "0%"
+    },
+    {
+      "id_placa": "Fileira_Sul_01",
+      "kWh/m²/dia": {
+        "real": {
+          "media": 5.36,
+          "mensal": [6.551, 6.376, 5.918, 4.94, 3.376, 2.444, 2.747, 4.728, 6.186, 6.843, 7.24, 6.967]
+        },
+        "referencia": {
+          "media_sem_sombra": 5.795,
+          "mensal_sem_sombra": [6.64, 6.376, 5.918, 5.088, 4.576, 4.044, 4.31, 5.254, 6.186, 6.843, 7.24, 7.066]
+        }
+      },
+      "perda_sombreamento_estimada": "16.0%"
     }
   ]
 }
