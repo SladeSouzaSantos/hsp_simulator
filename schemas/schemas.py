@@ -6,6 +6,11 @@ class DadosHSPReal(BaseModel):
     media: float = Field(..., description="Média anual de HSP corrigida com perdas")
     mensal: List[float] = Field(..., description="Lista de 12 valores mensais de HSP com perdas")
 
+class DadosClimaticos(BaseModel):
+    temp_max_mensal: List[float] = Field(default=[], description="Máximas mensais (°C)")
+    temp_avg_mensal: List[float] = Field(default=[], description="Médias mensais (°C)")
+    temp_min_mensal: List[float] = Field(default=[], description="Mínimas mensais (°C)")
+
 class DadosHSPReferencia(BaseModel):
     media_sem_sombra: float = Field(..., description="Potencial teórico médio anual (Sem Sombra)")
     mensal_sem_sombra: List[float] = Field(..., description="Lista de 12 valores mensais teóricos (Sem Sombra)")
@@ -15,6 +20,12 @@ class UnidadeEnergia(BaseModel):
     referencia: DadosHSPReferencia = Field(..., description="Dados de referência para comparação")
 
 class ProjetoSolarResponse(BaseModel):
+    clima: DadosClimaticos = Field(
+        ..., 
+        title="Dados Climáticos",
+        description="Informações de temperatura da localidade"
+    )
+
     hsp_unidade: UnidadeEnergia = Field(
         ..., 
         alias="kWh/m²/dia",
@@ -49,9 +60,9 @@ class ItemArranjoResponse(BaseModel):
     # Necessário para que o FastAPI aceite o dicionário com a chave "kWh/m²/dia"
     model_config = ConfigDict(populate_by_name=True)
 
-
 class ArranjoSolarResponse(BaseModel):
     total_placas: int = Field(..., title="Total de Itens", description="Quantidade de placas processadas")
+    clima: DadosClimaticos = Field(..., title="Dados Climáticos Locais", description="Temperaturas para dimensionamento")
     resultados: List[ItemArranjoResponse] = Field(..., title="Lista de Resultados")
 
 # --- MODELOS DE ENTRADA ---

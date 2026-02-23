@@ -12,7 +12,7 @@ class NasaPowerProvider(SolarDataProvider):
     @lru_cache(maxsize=128)
     def _get_cached_data(url, lat, lon):
         params = {
-            "parameters": "ALLSKY_SFC_SW_DWN,ALLSKY_SFC_SW_DIFF,T2M,T2M_MAX,RH2M,WS10M",
+            "parameters": "ALLSKY_SFC_SW_DWN,ALLSKY_SFC_SW_DIFF,T2M,T2M_MAX,T2M_MIN,RH2M,WS10M",
             "community": "SB",
             "longitude": round(lon, 4),
             "latitude": round(lat, 4),
@@ -43,6 +43,8 @@ class NasaPowerProvider(SolarDataProvider):
             "hsp_global": [raw_data['ALLSKY_SFC_SW_DWN'][m] * 0.024 for m in months],
             "hsp_diffuse": [raw_data['ALLSKY_SFC_SW_DIFF'][m] * 0.024 for m in months],
             "temp_max": [raw_data['T2M_MAX'][m] for m in months],
+            "temp_avg": [raw_data['T2M'][m] for m in months],
+            "temp_min": [raw_data['T2M_MIN'][m] for m in months],
             "wind_speed": [raw_data['WS10M'][m] for m in months],
             "metadata": {
                 "source": "NASA POWER Project",

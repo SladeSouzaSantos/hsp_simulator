@@ -11,6 +11,8 @@ class SolarDataProvider(ABC):
             "hsp_global": [...], 
             "hsp_diffuse": [...],
             "temp_max": [...],
+            "temp_avg": [...],
+            "temp_min": [...],
             "wind_speed": [...]
         }
         """

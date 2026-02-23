@@ -111,11 +111,12 @@ class SolarDashboardRenderer:
             st.subheader(f"Resultados Médios Diários ({label_tipo}) - {nome_exibicao}")
             
             col1, col2, col3 = st.columns(3)
-            ganho_vs_padrao = ((res_projeto['media'] / res_padrao['media']) - 1) * 100
+
+            ganho_vs_padrao = ((res_projeto['kWh/m²/dia']['real']['media'] / res_padrao['kWh/m²/dia']['real']['media']) - 1) * 100
             
-            col1.metric("HSP Projeto", f"{res_projeto['media']:.3f}", f"{ganho_vs_padrao:.1f}% vs. 0°/0°")
-            col2.metric("HSP Padrão (0°/0°)", f"{res_padrao['media']:.3f}")
-            col3.metric("Diferença Bruta", f"{res_projeto['media'] - res_padrao['media']:.3f} kWh/m²")
+            col1.metric("HSP Projeto", f"{res_projeto['kWh/m²/dia']['real']['media']:.3f}", f"{ganho_vs_padrao:.1f}% vs. 0°/0°")
+            col2.metric("HSP Padrão (0°/0°)", f"{res_padrao['kWh/m²/dia']['real']['media']:.3f}")
+            col3.metric("Diferença Bruta", f"{res_projeto['kWh/m²/dia']['real']['media'] - res_padrao['kWh/m²/dia']['real']['media']:.3f} kWh/m²")
 
             perda_str = res_projeto.get("perda_sombreamento_estimada", "0%")
             
@@ -124,8 +125,8 @@ class SolarDashboardRenderer:
                 st.error(f"🚨 **Perda por Sombreamento:** {perda_str}")
 
             meses = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
-            df_projeto = pd.DataFrame({"Mês": meses, "HSP": res_projeto["mensal"], "Cenário": "Seu Projeto"})
-            df_padrao = pd.DataFrame({"Mês": meses, "HSP": res_padrao["mensal"], "Cenário": "Padrão (0°/0°)"})
+            df_projeto = pd.DataFrame({"Mês": meses, "HSP": res_projeto['kWh/m²/dia']['real']["mensal"], "Cenário": "Seu Projeto"})
+            df_padrao = pd.DataFrame({"Mês": meses, "HSP": res_padrao['kWh/m²/dia']['real']["mensal"], "Cenário": "Padrão (0°/0°)"})
             df_comp = pd.concat([df_projeto, df_padrao])
 
             grafico = alt.Chart(df_comp).mark_bar().encode(
@@ -145,8 +146,8 @@ class SolarDashboardRenderer:
                 # Criamos o dataframe garantindo que os dados venham das variáveis de resultado
                 df_table = pd.DataFrame({
                     "Mês": meses,
-                    "Seu Projeto": res_projeto["mensal"],
-                    "Padrão (0°/0°)": res_padrao["mensal"]
+                    "Seu Projeto": res_projeto['kWh/m²/dia']['real']["mensal"],
+                    "Padrão (0°/0°)": res_padrao['kWh/m²/dia']['real']["mensal"]
                 }).set_index("Mês").T
                 
                 # O .style.format força o Streamlit a mostrar 3 casas decimais em tudo

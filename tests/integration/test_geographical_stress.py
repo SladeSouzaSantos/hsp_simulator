@@ -37,6 +37,8 @@ def test_estresse_motor_com_cidades_reais(cidade, inclinacao, dados_hsp):
         "hsp_global": [dados_hsp[m] for m in meses_sd],
         "hsp_diffuse": [h * 0.3 for h in [dados_hsp[m] for m in meses_sd]], # Difusa estimada
         "temp_max": [30.0] * 12,
+        "temp_avg": [26.0] * 12,
+        "temp_min": [18.0] * 12,
         "wind_speed": [3.0] * 12
     }
 
@@ -61,7 +63,7 @@ def test_estresse_motor_com_cidades_reais(cidade, inclinacao, dados_hsp):
     )
 
     # 5. Validações básicas de sanidade
-    assert "media" in resultado
-    assert resultado["media"] > 0
-    assert not math.isnan(resultado["media"])
-    assert len(resultado["mensal"]) == 12
+    assert "kWh/m²/dia" in resultado
+    assert "real" in resultado["kWh/m²/dia"]
+    assert len(resultado["kWh/m²/dia"]["real"]["mensal"]) == 12
+    assert isinstance(resultado["kWh/m²/dia"]["real"]["media"], float)

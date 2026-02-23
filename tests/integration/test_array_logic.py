@@ -11,6 +11,8 @@ def engine_setup():
         "hsp_global": [5.0, 5.2, 5.5, 4.8, 4.2, 3.9, 4.1, 4.7, 5.3, 5.8, 5.6, 5.1],
         "hsp_diffuse": [1.2, 1.3, 1.4, 1.1, 1.0, 0.9, 1.0, 1.2, 1.3, 1.5, 1.4, 1.2],
         "temp_max": [30.0] * 12,
+        "temp_avg": [25.0] * 12,
+        "temp_min": [20.0] * 12,
         "wind_speed": [2.0] * 12
     }
     repo_mock.get_standardized_data.return_value = dados_fake
@@ -61,4 +63,4 @@ def test_estresse_arranjo_misto(engine_setup):
 
     assert perda_sombra > 40
     assert perda_livre == 0.0
-    assert res_sombra["media"] < res_livre["media"]
+    assert res_sombra["kWh/m²/dia"]["real"]["media"] < res_livre["kWh/m²/dia"]["real"]["media"]

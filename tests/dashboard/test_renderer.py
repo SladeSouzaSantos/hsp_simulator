@@ -26,8 +26,22 @@ def test_cache_logic_integration(mock_components):
     st.session_state.cache_api_data = {}
     
     # Mock do retorno do repositório
-    repo.get_standardized_data.return_value = {"hsp_global": [5.0]*12, "metadata": {"source": "NASA POWER"}}
-    engine.calcular_projeto_solar.return_value = {"media": 5.0, "mensal": [5.0]*12}
+    repo.get_standardized_data.return_value = {
+        "hsp_global": [5.0]*12, 
+        "hsp_diffuse": [1.0]*12, 
+        "temp_max": [30.0]*12, 
+        "temp_avg": [25.0]*12, 
+        "temp_min": [20.0]*12, 
+        "wind_speed": [2.0]*12,
+        "metadata": {"source": "NASA POWER"}
+    }
+    engine.calcular_projeto_solar.return_value = {
+        "kWh/m²/dia": {
+            "real": {"media": 5.0, "mensal": [5.0]*12},
+            "referencia": {"media_sem_sombra": 5.2, "mensal_sem_sombra": [5.2]*12}
+        },
+        "perda_sombreamento_estimada": "4%"
+    }
 
     # Executa uma renderização parcial (apenas para testar o fluxo de dados)
     # Usamos valores arbitrários

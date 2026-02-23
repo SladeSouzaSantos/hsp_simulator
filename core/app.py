@@ -53,7 +53,24 @@ class SolarEngine:
         if formato == "json":
             return json.dumps(resultado, indent=4, ensure_ascii=False)
         
-        return resultado
+        return {
+            "clima": {
+                "temp_max_mensal": dados_climatologicos.get("temp_max", []),
+                "temp_avg_mensal": dados_climatologicos.get("temp_avg", []),
+                "temp_min_mensal": dados_climatologicos.get("temp_min", [])
+            },
+            "kWh/m²/dia": {
+                "real": {
+                    "media": resultado["media"],
+                    "mensal": resultado["mensal"]
+                },
+                "referencia": {
+                    "media_sem_sombra": resultado["media_sem_sombra"],
+                    "mensal_sem_sombra": resultado["mensal_sem_sombra"]
+                }
+            },
+            "perda_sombreamento_estimada": resultado["perda_sombreamento_estimada"]            
+        }
     
     def calcular_arranjo_completo(self, lat, lon, itens, perez_engine_class: Type[BasePerezEngine]):
         """
@@ -89,19 +106,20 @@ class SolarEngine:
                 config_obstaculo=item.config_obstaculo.model_dump() if item.config_obstaculo else None
             )
 
-            resultados.append({
+            item_resultado = {
                 "id_placa": item.id_placa,
-                "kWh/m²/dia": {
-                    "real": {
-                        "media": res["media"],
-                        "mensal": res["mensal"],
-                    },
-                    "referencia": {
-                        "media_sem_sombra": res["media_sem_sombra"],
-                        "mensal_sem_sombra": res["mensal_sem_sombra"],
-                    }
-                },
+                "kWh/m²/dia": res["kWh/m²/dia"],
                 "perda_sombreamento_estimada": res["perda_sombreamento_estimada"]
-            })
-
-        return resultados
+            }
+            
+            resultados.append(item_resultado)
+            
+        return {
+            "total_placas": len(resultados),
+            "resultados": resultados,
+            "clima": {
+                "temp_max_mensal": dados_cache_api.get("temp_max", []),
+                "temp_avg_mensal": dados_cache_api.get("temp_avg", []),
+                "temp_min_mensal": dados_cache_api.get("temp_min", [])
+            }
+        }

@@ -38,7 +38,9 @@ class InpeLabrenProvider(SolarDataProvider):
         return {
             "hsp_global": [row[f"{m}_glo"] / 1000 for m in months],
             "hsp_diffuse": [row[f"{m}_dif"] / 1000 for m in months],
-            "temp_max": [25.0] * 12, 
+            "temp_max": [25.0] * 12,
+            "temp_avg": [25.0] * 12,
+            "temp_min": [25.0] * 12, 
             "wind_speed": [3.0] * 12,
             "metadata": {
                 "source": "INPE/LABREN Atlas 2a Edicao (2017)",

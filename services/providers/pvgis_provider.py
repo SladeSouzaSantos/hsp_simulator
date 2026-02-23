@@ -33,13 +33,17 @@ class PvgisProvider(SolarDataProvider):
         # Convertemos W/m² para kWh/m²/dia (HSP) -> * 24 / 1000 = 0.024
         monthly_ghi = df_hourly['ghi'].resample('ME').mean() * 0.024
         monthly_dhi = df_hourly['dhi'].resample('ME').mean() * 0.024
-        monthly_temp = df_hourly['temp_air'].resample('ME').max()
+        temp_max = df_hourly['temp_air'].resample('ME').max()
+        temp_avg = df_hourly['temp_air'].resample('ME').mean()
+        temp_min = df_hourly['temp_air'].resample('ME').min()
         monthly_wind = df_hourly['wind_speed'].resample('ME').mean()
 
         return {
             "hsp_global": monthly_ghi.tolist(),
             "hsp_diffuse": monthly_dhi.tolist(),
-            "temp_max": monthly_temp.tolist(),
+            "temp_max": temp_max.tolist(),
+            "temp_avg": temp_avg.tolist(),
+            "temp_min": temp_min.tolist(),
             "wind_speed": monthly_wind.tolist(),
             "metadata": {
                 "source": "PVGIS-SARAH2/TMY Digital Observatory",

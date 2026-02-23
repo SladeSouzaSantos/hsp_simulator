@@ -21,6 +21,8 @@ def test_repository_com_dados_sundata(mock_cresesb_data):
         "hsp_global": [natal_0[m] for m in meses_sd],
         "hsp_diffuse": [1.0] * 12, # Valores fictícios para completar o contrato
         "temp_max": [30.0] * 12,
+        "temp_avg": [25.0] * 12,
+        "temp_min": [20.0] * 12,
         "wind_speed": [2.0] * 12
     }
 

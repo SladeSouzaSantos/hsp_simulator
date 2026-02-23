@@ -92,25 +92,14 @@ def post_hsp(
         )
 
         # Chamada do core
-        res = engine.calcular_projeto_solar(
+        resultados = engine.calcular_projeto_solar(
             perez_engine=perezEngine,
             config_obstaculo=config_sombra,
             formato="dict"
         )
 
-        return {
-            "kWh/m²/dia": {
-                "real": {
-                    "media": res["media"],
-                    "mensal": res["mensal"],
-                },
-                "referencia": {
-                    "media_sem_sombra": res["media_sem_sombra"],
-                    "mensal_sem_sombra": res["mensal_sem_sombra"],
-                }
-            },
-            "perda_sombreamento_estimada": res["perda_sombreamento_estimada"]
-        }
+        return resultados
+    
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))
 
@@ -299,9 +288,7 @@ def post_arranjo(
             perez_engine_class=perez_engine
         )
         
-        return {
-            "total_placas": len(resultados),
-            "resultados": resultados
-        }
+        return resultados
+    
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))

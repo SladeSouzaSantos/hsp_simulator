@@ -40,7 +40,7 @@ class SolarAuditor:
                 "Cenario": caso.get("nome", f"H{caso['h_obs']} D{caso['d_obs']}"), # Usa a altura e distância como nome se 'nome' faltar
                 "H_Obstaculo": caso["h_obs"],
                 "D_Obs": caso["d_obs"],
-                "HSP_Liquido": res["media"],
+                "HSP_Liquido": res["kWh/m²/dia"]["real"]["media"],
                 "Perda_Sombra": res["perda_sombreamento_estimada"]
             })
 
@@ -94,7 +94,7 @@ class SolarAuditor:
             sim_0 = self.engine.calcular_projeto_solar(
                 perez_engine=perez_type(lat=coords['latitude'], lon=coords['longitude'], inclinacao_deg=0, azimute_deg=0, is_bifacial=False),
                 dados_pre_carregados=dados_clima
-            )["media"]
+            )["kWh/m²/dia"]["real"]["media"]
 
             for inc_str, ref_data in inclinações.items():
                 inc = int(inc_str)
@@ -104,7 +104,7 @@ class SolarAuditor:
                 sim_alvo = self.engine.calcular_projeto_solar(
                     perez_engine=perez_type(lat=coords['latitude'], lon=coords['longitude'], inclinacao_deg=inc, azimute_deg=0, is_bifacial=False),
                     dados_pre_carregados=dados_clima
-                )["media"]
+                )["kWh/m²/dia"]["real"]["media"]
                 
                 # A mágica da Transposição:
                 fator_transposicao = sim_alvo / sim_0
