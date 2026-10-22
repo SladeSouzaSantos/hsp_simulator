@@ -2,7 +2,7 @@ name: Deploy HSP Simulator
 
 on:
   push:
-    branches: [ main, dev ]
+    branches: [main, dev]
 
 jobs:
   lint:
@@ -11,14 +11,13 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-
       - name: Lint Python & Configs
         uses: github/super-linter@v5
         env:
           VALIDATE_ALL_CODEBASE: false
           DEFAULT_BRANCH: main
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VALIDATE_PYTHON_BLACK: true 
+          VALIDATE_PYTHON_BLACK: true
           VALIDATE_YAML: true
 
   build:
@@ -31,23 +30,18 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-
       - name: Lowercase Repo Name
-        run: echo "REPO_LOWER=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
-
+        run: echo "REPO_LOWER=${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-
       - name: Login to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Build and Push
         uses: docker/build-push-action@v5
         with:
@@ -67,12 +61,10 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-
       - name: Connect to Tailscale
         uses: tailscale/github-action@v2
         with:
           authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
-
       - name: Copy Config Files via SCP
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -82,7 +74,6 @@ jobs:
           source: "docker-stack.yml,docker-stack-dev.yml,docker/*.conf"
           target: "/tmp/hsp-deploy-${{ github.ref_name }}"
           strip_components: 0
-
       - name: Execute Remote Deploy
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -90,8 +81,8 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            # 1. Identificar Ambiente
-            if [ "${{ github.ref_name }}" == "main" ]; then
+            set -eu
+            if [ "${{ github.ref_name }}" = "main" ]; then
               DEST_DIR="/app/hsp-simulator-prod"
               STACK_FILE="docker-stack.yml"
               STACK_NAME="hsp-prod"
@@ -102,25 +93,25 @@ jobs:
               STACK_NAME="hsp-dev"
               API_VAL="${{ vars.API_URL_DEV }}"
             fi
-            
-            # 2. Preparar Diretório (sudo se necessário)
-            mkdir -p $DEST_DIR
-            rm -rf $DEST_DIR/docker
-            
-            # 3. Mover arquivos da pasta temporária
-            cp -r /tmp/hsp-deploy-${{ github.ref_name }}/* $DEST_DIR/
-            cd $DEST_DIR
-            
-            # 4. Configurar variáveis de ambiente
-            echo "API_URL=$API_VAL" > .env
-            
-            # 5. Login Automático no GHCR (Resolve o erro denied)
-            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            
-            # 6. Deploy no Swarm
-            # --with-registry-auth: Repassa o login para os nós do swarm
-            # --resolve-image always: Garante que o Raspberry baixe a imagem nova mesmo que a tag seja a mesma
-            docker stack deploy -c $STACK_FILE $STACK_NAME --with-registry-auth --resolve-image always --prune
+
+            TEMP_DIR="/tmp/hsp-deploy-${{ github.ref_name }}"
+            test -f "$TEMP_DIR/$STACK_FILE"
+            test -f "$TEMP_DIR/docker/nginx.conf"
+            test -f "$TEMP_DIR/docker/nginx-dev.conf"
+            docker network inspect greencity-net >/dev/null
+            docker stack config -c "$TEMP_DIR/$STACK_FILE" >/dev/null
+
+            # Preservar configurações existentes do Nginx; nunca apagar o diretório.
+            mkdir -p "$DEST_DIR/docker"
+            cp "$TEMP_DIR/docker/nginx.conf" "$DEST_DIR/docker/nginx.conf"
+            cp "$TEMP_DIR/docker/nginx-dev.conf" "$DEST_DIR/docker/nginx-dev.conf"
+            cp "$TEMP_DIR/$STACK_FILE" "$DEST_DIR/$STACK_FILE"
+            printf 'API_URL=%s\n' "$API_VAL" > "$DEST_DIR/.env"
+            cd "$DEST_DIR"
+
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+            # Não usar --prune enquanto conferimos a reconciliação dos serviços.
+            docker stack deploy -c "$STACK_FILE" "$STACK_NAME" --with-registry-auth --resolve-image always
 
   healthcheck:
     name: Verify Deployment
@@ -131,18 +122,13 @@ jobs:
         uses: tailscale/github-action@v2
         with:
           authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
-
       - name: Wait and Check URL
         run: |
-          echo "⏳ Aguardando 60s para inicialização dos containers..."
+          echo 'Aguardando inicialização dos containers...'
           sleep 60
-          
-          if [ "${{ github.ref_name }}" == "main" ]; then 
+          if [ "${{ github.ref_name }}" = "main" ]; then
             PORT=8090
-          else 
+          else
             PORT=8091
           fi
-          
-          echo "🌐 Testando acesso em http://${{ secrets.SERVER_HOST }}:$PORT"
-          # Tenta o curl com retentativas caso o Nginx demore a subir
-          curl --retry 10 --retry-delay 15 --retry-all-errors --connect-timeout 10 -Iv http://${{ secrets.SERVER_HOST }}:$PORT || exit 1
+          curl --fail --show-error --silent --location --retry 10 --retry-delay 15 --retry-all-errors --connect-timeout 10 --max-time 30 -o /dev/null -w 'HTTP %{http_code}\n' "http://${{ secrets.SERVER_HOST }}:$PORT/"
