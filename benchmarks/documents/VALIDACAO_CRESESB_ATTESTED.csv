@@ -1,0 +1,12 @@
+﻿Cidade;Angulo;HSP_Estimado;HSP_Real_Gabarito;Erro_Logica_Percentual
+Natal;4;5,383;5,68;-5,22
+Natal;6;5,389;5,68;-5,12
+Natal;16;5,343;5,6;-4,58
+Petrolina;7;5,496;5,8;-5,25
+Petrolina;9;5,507;5,8;-5,06
+Petrolina;21;5,465;5,68;-3,78
+Manaus;3;3,995;4,42;-9,63
+Manaus;4;3,999;4,42;-9,52
+Porto Alegre;22;4,66;4,62;0,86
+Porto Alegre;30;4,668;4,6;1,47
+Porto Alegre;50;4,383;4,26;2,89

@@ -1,128 +1,71 @@
-from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, List
+from typing import List, Optional, Literal
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-# --- MODELOS DE RESPOSTA (Para documentação no Swagger) ---
+class ConfigObstaculo(BaseModel):
+    altura_obstaculo: float = Field(ge=0)
+    distancia_obstaculo: float = Field(gt=0)
+    referencia_azimutal_obstaculo: float = Field(ge=0, le=360)
+    largura_obstaculo: float = Field(default=10, gt=0)
+
+class ConfigTecnicaBase(BaseModel):
+    inclinacao_graus: float = Field(default=15, ge=0, le=90)
+    azimute_graus: float = Field(default=0, ge=0, le=360,
+        description='Geográfico: 0=N, 90=L, 180=S, 270=O')
+    albedo_solo: float = Field(default=.2, ge=0, le=1)
+    distancia_centro_modulo_chao: float = Field(default=.2, ge=0)
+    tecnologia_celula: Literal['TOPCON','PERC','AL_BSF','HJT'] = 'TOPCON'
+    is_bifacial: bool = False
+    comprimento_modulo: float = Field(default=2.278, gt=0)
+    largura_modulo: float = Field(default=1.134, gt=0)
+    orientacao: Literal['Retrato','Paisagem'] = 'Retrato'
+    config_obstaculo: Optional[ConfigObstaculo] = None
+    modelo_transposicao: Literal['perez','haydavies','isotropic'] = 'perez'
+    fonte_dados: Literal['auto','NASA POWER','PVGIS','INPE/LABREN Atlas 2017'] = 'auto'
+
+class ProjetoSolarRequest(ConfigTecnicaBase):
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+
+class ItemArranjoRequest(ConfigTecnicaBase):
+    id_placa: str = Field(min_length=1)
+
+class ProjetoArranjoRequest(BaseModel):
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+    itens: List[ItemArranjoRequest] = Field(min_length=1, max_length=500)
+
 class DadosHSPReal(BaseModel):
-    media: float = Field(..., description="Média anual de HSP corrigida com perdas")
-    mensal: List[float] = Field(..., description="Lista de 12 valores mensais de HSP com perdas")
-
-class DadosClimaticos(BaseModel):
-    temp_max_mensal: List[float] = Field(default=[], description="Máximas mensais (°C)")
-    temp_avg_mensal: List[float] = Field(default=[], description="Médias mensais (°C)")
-    temp_min_mensal: List[float] = Field(default=[], description="Mínimas mensais (°C)")
+    media: float
+    mensal: List[float] = Field(min_length=12, max_length=12)
 
 class DadosHSPReferencia(BaseModel):
-    media_sem_sombra: float = Field(..., description="Potencial teórico médio anual (Sem Sombra)")
-    mensal_sem_sombra: List[float] = Field(..., description="Lista de 12 valores mensais teóricos (Sem Sombra)")
+    media_sem_sombra: float
+    mensal_sem_sombra: List[float] = Field(min_length=12, max_length=12)
 
 class UnidadeEnergia(BaseModel):
-    real: DadosHSPReal = Field(..., description="Dados reais considerando sombreamento")
-    referencia: DadosHSPReferencia = Field(..., description="Dados de referência para comparação")
+    real: DadosHSPReal
+    referencia: DadosHSPReferencia
+
+class DadosClimaticos(BaseModel):
+    temp_max_mensal: List[Optional[float]] = Field(default_factory=list)
+    temp_avg_mensal: List[Optional[float]] = Field(default_factory=list)
+    temp_min_mensal: List[Optional[float]] = Field(default_factory=list)
 
 class ProjetoSolarResponse(BaseModel):
-    clima: DadosClimaticos = Field(
-        ..., 
-        title="Dados Climáticos",
-        description="Informações de temperatura da localidade"
-    )
-
-    hsp_unidade: UnidadeEnergia = Field(
-        ..., 
-        alias="kWh/m²/dia",
-        title="Dados de Irradiância",
-        description="Dados de HSP (Horas de Sol Pleno) aninhados por tipo"
-    )
-    perda_sombreamento_estimada: str = Field(
-        ..., 
-        title="Perda de Sombra", 
-        description="Percentual estimado de perda por obstrução"
-    )
-
+    clima: DadosClimaticos
+    hsp_unidade: UnidadeEnergia = Field(alias='kWh/m²/dia')
+    perda_sombreamento_estimada: str
+    detalhes: dict = Field(default_factory=dict)
     model_config = ConfigDict(populate_by_name=True)
 
 class ItemArranjoResponse(BaseModel):
-    id_placa: str = Field(..., title="ID do Módulo", json_schema_extra={"example": "Placa_01"})
-    
-    # O alias permite que a chave no JSON seja a unidade técnica
-    hsp_unidade: UnidadeEnergia = Field(
-        ..., 
-        alias="kWh/m²/dia", 
-        title="Dados por Unidade",
-        description="Agrupamento de dados de irradiância em kWh/m²/dia"
-    )
-    
-    perda_sombreamento_estimada: str = Field(
-        ..., 
-        title="Perda de Sombra (%)", 
-        description="Impacto percentual do obstáculo no rendimento"
-    )
-
-    # Necessário para que o FastAPI aceite o dicionário com a chave "kWh/m²/dia"
+    id_placa: str
+    hsp_unidade: UnidadeEnergia = Field(alias='kWh/m²/dia')
+    perda_sombreamento_estimada: str
+    detalhes: dict = Field(default_factory=dict)
     model_config = ConfigDict(populate_by_name=True)
 
 class ArranjoSolarResponse(BaseModel):
-    total_placas: int = Field(..., title="Total de Itens", description="Quantidade de placas processadas")
-    clima: DadosClimaticos = Field(..., title="Dados Climáticos Locais", description="Temperaturas para dimensionamento")
-    resultados: List[ItemArranjoResponse] = Field(..., title="Lista de Resultados")
-
-# --- MODELOS DE ENTRADA ---
-class ConfigObstaculo(BaseModel):
-    altura_obstaculo: float = Field(
-        ..., title="Altura do Obstáculo", description="Altura total do objeto em metros"
-    )
-    distancia_obstaculo: float = Field(
-        ..., title="Distância do Obstáculo", description="Vão livre horizontal até a borda do painel (m)"
-    )
-    referencia_azimutal_obstaculo: float = Field(
-        ..., title="Azimute do Obstáculo", description="Direção central do objeto (0=N, 180=S)"
-    )
-    largura_obstaculo: float = Field(
-        10.0, title="Largura do Obstáculo", description="Extensão lateral da face do objeto (m)"
-    )
-
-class ConfigTecnicaBase(BaseModel):
-    inclinacao_graus: int = Field(
-        15, title="Inclinação", description="Ângulo de inclinação do painel (0 a 90°)"
-    )
-    azimute_graus: int = Field(
-        0, title="Azimute", description="Orientação do painel (0=Norte, 180=Sul)"
-    )
-    albedo_solo: float = Field(
-        0.2, title="Albedo", description="Fator de reflexão do solo (ex: 0.2 para grama)"
-    )
-    distancia_centro_modulo_chao: float = Field(
-        0.15, title="Altura de Instalação", description="Altura do centro do módulo até o solo (m)"
-    )
-    tecnologia_celula: str = Field(
-        "TOPCON", title="Tecnologia", description="Tipo de célula (TOPCON, PERC, AL BSF)"
-    )
-    is_bifacial: bool = Field(
-        True, title="Bifacialidade", description="Habilitar cálculo de face traseira"
-    )
-    comprimento_modulo: float = Field(
-        2.278, title="Comprimento", description="Lado maior do painel em metros"
-    )
-    largura_modulo: float = Field(
-        1.134, title="Largura", description="Lado menor do painel em metros"
-    )
-    orientacao: str = Field(
-        "Retrato", title="Orientação", description="Posicionamento: 'Retrato' ou 'Paisagem'"
-    )
-    config_obstaculo: Optional[ConfigObstaculo] = Field(
-        None, title="Configuração de Sombra", description="Dicionário com dados do obstáculo"
-    )
-
-class ProjetoSolarRequest(ConfigTecnicaBase):
-    latitude: float = Field(..., title="Latitude", json_schema_extra={"example": -7.562})
-    longitude: float = Field(..., title="Longitude", json_schema_extra={"example": -37.688})
-    
-class ItemArranjoRequest(ConfigTecnicaBase):
-    id_placa: str = Field(..., title="Identificador", json_schema_extra={"example": "Modulo_01"})
-
-class ProjetoArranjoRequest(BaseModel):
-    latitude: float = Field(..., json_schema_extra={"example": -7.562})
-    longitude: float = Field(..., json_schema_extra={"example": -37.688})
-    # Lista de placas/fileiras para analisar
-    itens: List[ItemArranjoRequest]
-
-# --- ENDPOINTS ---
+    total_placas: int
+    clima: DadosClimaticos
+    resultados: List[ItemArranjoResponse]

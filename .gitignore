@@ -1,47 +1,13 @@
-# Python (Arquivos compilados)
 __pycache__/
 *.py[cod]
-*$py.class
-*.so
-.Python
-*.egg-info/
-*.egg
-
-# Ambientes Virtuais
-venv/
 .venv/
-env/
-bin/
-
-# IDEs (Importante para portfólio limpo)
-.vscode/
-.idea/
-
-# Streamlit e Logs
-.streamlit/
-*.log
-
-# --- DADOS E RELATÓRIOS ---
-
-# Bloqueia todos os CSVs e JSONs por padrão
-data/*.csv
-data/*.json
-
-# Exceções (Arquivos que PRECISAM ir para o GitHub)
-!data/localidades.json
-!tests/fixtures/amostragem_sundata.json
-
-# Protege os metadados e o banco do INPE (se quiser versionar o parquet)
-# Se o .parquet for muito grande, remova a exclamação abaixo:
-!data/inpe_labren/*.parquet
-!data/inpe_labren/*.pdf
-
-# Benchmark Documents
-benchmarks/documents/*
-
-# Configurações Sensíveis
 .env
+.pytest_cache/
+.streamlit/secrets.toml
+coverage.xml
+.coverage
+*.log
+*.zip
 
-# Sistema
-.DS_Store
-Thumbs.db
+# Respostas PVGIS de validação; regeneráveis e dependentes da rede
+benchmarks/documents/cache_pvgis_validacao/

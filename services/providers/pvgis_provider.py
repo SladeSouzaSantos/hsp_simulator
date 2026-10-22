@@ -1,53 +1,40 @@
-import pandas as pd
-from pvlib import iotools
+"""PVGIS typical meteorological year in UTC, not monthly means."""
 from functools import lru_cache
+import numpy as np
+import pandas as pd
 from .solar_data_provider import SolarDataProvider
 
 class PvgisProvider(SolarDataProvider):
-    def __init__(self):
-        self.name = "PVGIS"
+    name = 'PVGIS'
 
     @staticmethod
-    @lru_cache(maxsize=128)
+    @lru_cache(maxsize=32)
     def _get_cached_data(lat, lon):
-        """Acesso direto à API via PVLib com Cache."""
-        print(f"[PVGIS API] Buscando dados para {lat}, {lon}")
-        data, _ = iotools.get_pvgis_tmy(
-            latitude=lat, longitude=lon, map_variables=True, outputformat='json'
-        )
-        return data
+        from pvlib import iotools
+        df, _ = iotools.get_pvgis_tmy(lat, lon, outputformat='json',
+                                      map_variables=True, coerce_year=2023, timeout=65)
+        df = df.rename(columns={'Gb(n)':'dni','Gd(h)':'dhi','G(h)':'ghi'})
+        if df.index.tz is None:
+            df.index = df.index.tz_localize('UTC')
+        else:
+            df.index = df.index.tz_convert('UTC')
+        df = df.sort_index()
+        if not {'ghi','dhi','dni'}.issubset(df.columns):
+            raise ValueError('PVGIS TMY incompleto: sem ghi, dhi, dni')
+        return df
 
-    def fetch_solar_data(self, lat: float, lon: float) -> pd.DataFrame:
-        """Camada intermediária para manter simetria com NasaProvider."""
-        try:
-            return self._get_cached_data(lat, lon)
-        except Exception as e:
-            print(f"Erro de conexão com o PVGIS: {e}")
-            raise Exception("Serviço PVGIS temporariamente indisponível.")
+    def fetch_solar_data(self, lat, lon):
+        return self._get_cached_data(round(float(lat),4), round(float(lon),4))
 
-    def get_solar_data(self, lat: float, lon: float) -> dict:
-        """Processa o bruto (DataFrame) para o contrato padronizado."""
-        df_hourly = self.fetch_solar_data(lat, lon)
-
-        # Agrupamento Mensal (Resample)
-        # Convertemos W/m² para kWh/m²/dia (HSP) -> * 24 / 1000 = 0.024
-        monthly_ghi = df_hourly['ghi'].resample('ME').mean() * 0.024
-        monthly_dhi = df_hourly['dhi'].resample('ME').mean() * 0.024
-        temp_max = df_hourly['temp_air'].resample('ME').max()
-        temp_avg = df_hourly['temp_air'].resample('ME').mean()
-        temp_min = df_hourly['temp_air'].resample('ME').min()
-        monthly_wind = df_hourly['wind_speed'].resample('ME').mean()
-
-        return {
-            "hsp_global": monthly_ghi.tolist(),
-            "hsp_diffuse": monthly_dhi.tolist(),
-            "temp_max": temp_max.tolist(),
-            "temp_avg": temp_avg.tolist(),
-            "temp_min": temp_min.tolist(),
-            "wind_speed": monthly_wind.tolist(),
-            "metadata": {
-                "source": "PVGIS-SARAH2/TMY Digital Observatory",
-                "lat": lat,
-                "lon": lon
-            }
-        }
+    def get_solar_data(self, lat, lon):
+        df = self.fetch_solar_data(lat, lon)
+        m = (df[['ghi','dhi']].resample('D').sum()/1000).groupby(lambda idx: idx.month).mean().reindex(range(1,13))
+        temp = df.groupby(df.index.month)['temp_air'] if 'temp_air' in df else None
+        def clean(v):
+            return [float(x) if pd.notna(x) else None for x in v]
+        return {'hourly':df, 'hsp_global':m['ghi'].tolist(), 'hsp_diffuse':m['dhi'].tolist(),
+                'temp_max':clean(temp.max().reindex(range(1,13))) if temp is not None else [None]*12,
+                'temp_avg':clean(temp.mean().reindex(range(1,13))) if temp is not None else [None]*12,
+                'temp_min':clean(temp.min().reindex(range(1,13))) if temp is not None else [None]*12,
+                'metadata': {'source':self.name, 'temporal_resolution':'TMY_hourly',
+                             'time_standard':'UTC', 'units':'W/m²','synthetic':False}}

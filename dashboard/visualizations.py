@@ -1,268 +1,80 @@
-import math
-import streamlit as st
+"""Streamlit result renderer; plotted values come from corrected engine only."""
 import pandas as pd
-import altair as alt
-import plotly.graph_objects as go
-import numpy as np
-from datetime import datetime
-from typing import Type
-from core.app import SolarEngine
-from core.solar_engine_factory import SolarPerezEngineFactory
-from services.solar_repository import SolarRepository
+import streamlit as st
+from core.perez_engines.perez_engine_pvlib import PerezEnginePVLib
+
+MONTHS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _load_provider_data(latitude, longitude, provider, _repository):
+    """Cache per coordinate and source, shared across dashboard reruns.
+
+    `_repository` is a dependency excluded from the cache key by Streamlit.
+    Source and coordinates ARE part of the key. For a newly configured provider,
+    explicitly clear the cache via the app/Streamlit cache management interface.
+    """
+    return _repository.get_standardized_data(
+        latitude, longitude, force_provider=provider,
+    )
+
 
 class SolarDashboardRenderer:
-    def __init__(self, engine: SolarEngine, repository: SolarRepository):
-        """
-        Injetamos as dependências necessárias para o Dashboard funcionar.
-        """
-        self.engine = engine
-        self.repository = repository
-        self.perez_engine_type = SolarPerezEngineFactory.get_engine_type()
+    def __init__(self, engine, repository):
+        self.engine, self.repository = engine, repository
 
-    def calcular_posicoes(self, lat, altura, dia_ano, hora):
-        """Calcula a física da sombra e a posição do sol (Azimute e Altitude)."""
-        # Declinação Solar (Cooper, 1969)
-        delta = 23.45 * math.sin(math.radians(360/365 * (dia_ano - 81)))
-        # Ângulo Horário (15 graus por hora)
-        h_ang = (hora - 12) * 15
-        lat_rad, delta_rad, h_rad = map(math.radians, [lat, delta, h_ang])
-        
-        # Altitude Solar (Ângulo acima do horizonte)
-        sin_alpha = (math.sin(lat_rad) * math.sin(delta_rad) + 
-                    math.cos(lat_rad) * math.cos(delta_rad) * math.cos(h_rad))
-        
-        if sin_alpha <= 0.001: 
-            return None 
-        
-        alpha_rad = math.asin(sin_alpha)
-        comprimento_sombra = altura / math.tan(alpha_rad)
-        
-        # Azimute Solar
-        arg_cos = (math.sin(delta_rad) - math.sin(lat_rad) * math.sin(alpha_rad)) / (math.cos(lat_rad) * math.cos(alpha_rad))
-        arg_cos = max(min(arg_cos, 1), -1) 
-        gamma_deg = math.degrees(math.acos(arg_cos))
-        
-        if h_ang > 0: 
-            gamma_deg = 360 - gamma_deg
-        
-        return gamma_deg, (gamma_deg + 180) % 360, comprimento_sombra, math.degrees(alpha_rad)
-
-    def renderizar_layout_comparativo(
-            self, lat, lon, inc, azi, alb, h, tec_chave, modo_bifacial, 
-            orientacao, usar_obstaculo, config_obstaculo, nome_exibicao, provider_forcado=None):
-        # Normalizamos para o cache interno do worker
-        lat_fixed = round(float(lat), 4)
-        lon_fixed = round(float(lon), 4)
-        nome_provider = provider_forcado if provider_forcado else "Auto"
-        chave_local = f"{lat_fixed}_{lon_fixed}_{nome_provider}"
-        
-        # 1. Gerenciamento de Dados
-        if chave_local in st.session_state.cache_api_data:
-            dados_clima = st.session_state.cache_api_data[chave_local]
-        else:
-            with st.spinner("Buscando novos dados na NASA..."):
-                dados_clima = self.repository.get_standardized_data(lat=lat_fixed, lon=lon_fixed, force_provider=provider_forcado)
-                st.session_state.cache_api_data[chave_local] = dados_clima
-                st.success(f"✅ Dados carregados via {dados_clima['metadata']['source']}!")
-
-        # 2. Execução dos Cálculos (Dois Cenários)
-        with st.spinner("Calculando modelos..."):
-            # Cenário A: Seu Projeto
-            perez_engine_projeto = self.perez_engine_type(
-                lat=lat_fixed,
-                lon=lon_fixed,
-                inclinacao_deg=inc,
-                azimute_deg=azi,
-                is_bifacial=modo_bifacial,
-                tecnologia_celula=tec_chave,
-                albedo=alb,
-                altura_instalacao=h,
-                orientacao=orientacao
-            )
-
-            res_projeto = self.engine.calcular_projeto_solar(
-                perez_engine=perez_engine_projeto,
-                dados_pre_carregados=dados_clima,
-                config_obstaculo=config_obstaculo
-            )
-
-            # Cenário B: Padrão (Inclinação 0, Azimute 0)
-            perez_engine_padrao = self.perez_engine_type(
-                lat=lat_fixed,
-                lon=lon_fixed,
-                inclinacao_deg=0,
-                azimute_deg=0,
-                is_bifacial=modo_bifacial,
-                tecnologia_celula=tec_chave,
-                albedo=alb,
-                altura_instalacao=h,
-                orientacao=orientacao
-            )
-            
-            res_padrao = self.engine.calcular_projeto_solar(
-                perez_engine=perez_engine_padrao,
-                dados_pre_carregados=dados_clima,
-                config_obstaculo=None
-            )
-            
-            # --- EXIBIÇÃO DE MÉTRICAS E GRÁFICOS ---
-            # (O resto do seu código de métricas e Altair permanece igual daqui para baixo)
-            label_tipo = "Bifacial" if modo_bifacial else "Monofacial"
-            st.subheader(f"Resultados Médios Diários ({label_tipo}) - {nome_exibicao}")
-            
-            col1, col2, col3 = st.columns(3)
-
-            ganho_vs_padrao = ((res_projeto['kWh/m²/dia']['real']['media'] / res_padrao['kWh/m²/dia']['real']['media']) - 1) * 100
-            
-            col1.metric("HSP Projeto", f"{res_projeto['kWh/m²/dia']['real']['media']:.3f}", f"{ganho_vs_padrao:.1f}% vs. 0°/0°")
-            col2.metric("HSP Padrão (0°/0°)", f"{res_padrao['kWh/m²/dia']['real']['media']:.3f}")
-            col3.metric("Diferença Bruta", f"{res_projeto['kWh/m²/dia']['real']['media'] - res_padrao['kWh/m²/dia']['real']['media']:.3f} kWh/m²")
-
-            perda_str = res_projeto.get("perda_sombreamento_estimada", "0%")
-            
-            # Verificamos se há obstáculo e se a perda não é zero
-            if usar_obstaculo and perda_str not in ["0%", "0.0%"]:
-                st.error(f"🚨 **Perda por Sombreamento:** {perda_str}")
-
-            meses = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
-            df_projeto = pd.DataFrame({"Mês": meses, "HSP": res_projeto['kWh/m²/dia']['real']["mensal"], "Cenário": "Seu Projeto"})
-            df_padrao = pd.DataFrame({"Mês": meses, "HSP": res_padrao['kWh/m²/dia']['real']["mensal"], "Cenário": "Padrão (0°/0°)"})
-            df_comp = pd.concat([df_projeto, df_padrao])
-
-            grafico = alt.Chart(df_comp).mark_bar().encode(
-                x=alt.X('Mês:N', sort=None, title="Meses"),
-                y=alt.Y('HSP:Q', title="HSP (kWh/m²/dia)"),
-                xOffset='Cenário:N',
-                color=alt.Color('Cenário:N', scale=alt.Scale(range=['#ff4b4b', '#4b4bff']), title="Cenário"),
-                tooltip=['Cenário', 'Mês', alt.Tooltip('HSP', format='.3f')]
-            ).properties(
-                height=400,
-                title=f"Comparativo Mensal: Projeto vs. Referência Plana ({label_tipo})"
-            )
-
-            st.altair_chart(grafico, width='stretch')
-
-            with st.expander("Ver Tabela Comparativa Detalhada"):
-                # Criamos o dataframe garantindo que os dados venham das variáveis de resultado
-                df_table = pd.DataFrame({
-                    "Mês": meses,
-                    "Seu Projeto": res_projeto['kWh/m²/dia']['real']["mensal"],
-                    "Padrão (0°/0°)": res_padrao['kWh/m²/dia']['real']["mensal"]
-                }).set_index("Mês").T
-                
-                # O .style.format força o Streamlit a mostrar 3 casas decimais em tudo
-                st.table(df_table.style.format("{:.3f}"))
-
-    def renderizar_grafico_sombra(self, meses_lista, mes_v, hora_sim, lat, h, usar_obstaculo, h_obs, d_obs, azi_obs, azi, orientacao="Paisagem"):
-        mes_num = meses_lista.index(mes_v) + 1
-        dia_ano = datetime(2026, mes_num, 21).timetuple().tm_yday
-        
-        # Altura de referência para o cálculo do sol/sombra     
-        altura_ref = max(0, h_obs - h)
-        pos_agora = self.calcular_posicoes(lat, altura_ref, dia_ano, hora_sim)
-        az_sol, az_sombra, dist_sombra, alt_sol = pos_agora
-
-        # --- AJUSTES DE ESCALA (Sua regra: 2x a distância) ---
-        # Se não houver obstáculo, usamos um padrão de 10m para visualização do painel
-        max_r = d_obs * 2 if usar_obstaculo else 10
-
-        fig = go.Figure()
-
-        # =================================================================
-        # INCLUSÃO DA TRAJETÓRIA DO SOL (ESTILO SHADOW_APP.PY)
-        # =================================================================
-        # Criamos o rastro na borda do gráfico (90% do raio máximo)
-        rastro_distancia = max_r * 0.9 
-        traj_theta = []
-        alturaSol = []
-        
-        # Fazemos a varredura do dia para desenhar o caminho
-        for hr_track in np.linspace(5.5, 18.5, 60):
-            p_track = self.calcular_posicoes(lat, altura_ref, dia_ano, hr_track)
-            if p_track:
-                alturaSol.append(p_track[3]) # Guarda a altitude para possível uso futuro
-                traj_theta.append(p_track[0]) # Pega o Azimute do sol
-        
-        if traj_theta:
-            fig.add_trace(go.Scatterpolar(
-                r=[rastro_distancia] * len(traj_theta), 
-                theta=traj_theta,
-                mode='lines', 
-                name='Trajetória do Sol',
-                line=dict(color='gold', dash='dot', width=2) # Pontilhados amarelos
-            ))
-        # =================================================================
-
-        # --- ELEMENTO 1: O PAINEL (Escala Real 2.278m) ---
-        # 1. Ajuste do Tamanho do Painel baseado na orientação
-        dimensao_referencia_painel = 2.278 if orientacao == "Retrato" else 1.134
-
-        fig.add_trace(go.Scatterpolar(
-            r=[0, dimensao_referencia_painel], 
-            theta=[azi, azi],
-            mode='lines+markers', 
-            name=f'Módulo FV ({orientacao})',
-            line=dict(color='blue', width=2),
-            marker=dict(
-                symbol='arrow',         # Define o símbolo como seta
-                size=15,                # Ajuste o tamanho da ponta da seta aqui
-                angleref='previous',    # Faz a seta girar automaticamente para o ângulo do azimute
-                color='blue'
-            )
-        ))
-
-        # --- ELEMENTO 2: O OBSTÁCULO E SOMBRA ---
-            
-        # Sombra projetada: Começa no obstáculo
-        fig.add_trace(go.Scatterpolar(
-            r=[d_obs, d_obs + dist_sombra], 
-            theta=[azi_obs, az_sombra],
-            mode='lines', name='Sombra Projetada',
-            line=dict(color='rgba(50, 50, 50, 0.4)', width=10)
-        ))
-
-        # Marcador do Obstáculo
-        fig.add_trace(go.Scatterpolar(
-            r=[d_obs], theta=[azi_obs],
-            mode='markers+text', name='Obstáculo',
-            marker=dict(size=15, color='red', symbol='square')
-        ))
-
-        # --- ELEMENTO 3: TRAJETÓRIA DO SOL ---
-        traj_theta, traj_r = [], []
-        for hr in np.linspace(5.5, 18.5, 60):
-            p = self.calcular_posicoes(lat, altura_ref, dia_ano, hr)
-            if p:
-                # Para o rastro do sol, mapeamos a altitude (90-alt) para caber na escala do gráfico
-                # Mas como o gráfico agora é focado em metros, o sol é apenas referencial
-                traj_theta.append(p[0])
-                traj_r.append(p[0]) # Apenas para rastro direcional
-
-        if pos_agora:
-            # Indicador da direção do Sol (seta externa)
-            fig.add_trace(go.Scatterpolar(
-                r=[d_obs * 1.8], theta=[pos_agora[0]],
-                mode='markers', name='Direção do Sol',
-                marker=dict(size=12, color='orange', symbol='star')
-            ))
-
-        fig.update_layout(
-            polar=dict(
-                angularaxis=dict(
-                    direction="clockwise", 
-                    rotation=90, 
-                    tickvals=[0, 90, 180, 270], 
-                    ticktext=['N', 'L', 'S', 'O']
-                ),
-                radialaxis=dict(
-                    visible=True, 
-                    range=[0, max_r], 
-                    title="Metros"
+    def renderizar_layout_comparativo(self, lat, lon, inc, azi, alb, h, tec_chave,
+             modo_bifacial, orientacao, usar_obstaculo, config_obstaculo,
+             nome_exibicao, provider_forcado=None, modelo='perez'):
+        try:
+            with st.spinner('Carregando série horária e calculando irradiância...'):
+                climate = _load_provider_data(
+                    round(float(lat), 4), round(float(lon), 4),
+                    provider_forcado, self.repository,
                 )
-            ),
-            height=700, 
-            template="plotly_white",
-            legend=dict(orientation="h", y=-0.2)
-        )
-        
-        st.plotly_chart(fig, width='stretch')
+                if climate.get('hourly') is None:
+                    st.warning('INPE/LABREN fornece apenas médias mensais; não é possível calcular Perez horário sem inventar o perfil temporal. Selecione NASA POWER ou PVGIS.')
+                    st.dataframe(pd.DataFrame({'Mês':MONTHS,'GHI horizontal (kWh/m²/dia)':climate['hsp_global']}))
+                    return
+                def engine(tilt, azimuth, bifacial):
+                    return PerezEnginePVLib(lat, lon, tilt, azimuth, is_bifacial=bifacial,
+                        tecnologia_celula=tec_chave, albedo=alb, altura_instalacao=h,
+                        orientacao=orientacao, model=modelo)
+                projet = self.engine.calcular_projeto_solar(engine(inc,azi,modo_bifacial),climate,
+                          config_obstaculo if usar_obstaculo else None)
+                horizontal = self.engine.calcular_projeto_solar(engine(0,0,False),climate)
+                # Horizontal reference deliberately monofacial: direct comparison to GHI.
+            real = projet['kWh/m²/dia']['real']
+            ref = horizontal['kWh/m²/dia']['real']
+            st.subheader(f'Resultados — {nome_exibicao}')
+            st.caption(f"Fonte: {climate['metadata']['source']} | resolução: {climate['metadata']['temporal_resolution']} | modelo: {modelo} | azimute 0°=N, 90°=L, 180°=S, 270°=O")
+            baseline = projet['kWh/m²/dia']['referencia']
+            a,b,c,d = st.columns(4)
+            a.metric('HSP com sombra (kWh/m²/dia)', f"{real['media']:.3f}")
+            b.metric('HSP sem sombra (kWh/m²/dia)', f"{baseline['media_sem_sombra']:.3f}")
+            c.metric('GHI horizontal (kWh/m²/dia)', f"{ref['media']:.3f}")
+            d.metric('Perda anual de irradiância frontal', projet['perda_sombreamento_estimada'])
+            if modo_bifacial:
+                st.info('HSP equivalente bifacial = HSP frontal + irradiância traseira estimada × fator de bifacialidade. Não representa energia elétrica de saída nem validou o sombreamento por fileiras.')
+            if usar_obstaculo:
+                st.warning('Sombreamento geométrico de tela vertical retangular: apenas perda de irradiância DIRETA, não de energia elétrica. Difusa, refletida e face traseira não são obstruídas neste estágio.')
+                geometry = projet['detalhes'].get('sombra_geometria') or {}
+                if geometry.get('altura_ajustada_para_evitar_solo'):
+                    st.warning(f"Altura informada do centro ({h:.3f} m) colocaria a borda inferior abaixo do solo. Para a geometria de sombra, centro ajustado para {geometry['altura_centro_utilizada_m']:.3f} m. Informe uma altura real maior para melhorar a confiabilidade.")
+            df = pd.DataFrame({'Mês': MONTHS,
+                'HSP com sombra': real['mensal'],
+                'HSP sem sombra': baseline['mensal_sem_sombra'],
+                'GHI horizontal': ref['mensal'],
+                'Perda frontal de sombra (%)': projet['detalhes'].get('perda_sombreamento_mensal_pct', [0.]*12)})
+            st.bar_chart(df.set_index('Mês')[['HSP com sombra', 'HSP sem sombra', 'GHI horizontal']])
+            st.dataframe(df, use_container_width=True, hide_index=True)
+            st.download_button('Baixar resultados (CSV)', df.to_csv(index=False).encode('utf-8-sig'),
+                               'hsp_mensal.csv', mime='text/csv')
+            with st.expander('Componentes e qualidade do resultado'):
+                st.json(projet['detalhes'])
+        except Exception as e:
+            st.error(f'Não foi possível calcular: {e}')
+            st.info('Confira a fonte horária, as dependências, o acesso à rede e as mensagens no terminal.')
+
+    def renderizar_grafico_sombra(self, *args, **kwargs):
+        st.caption('Sombra estimada por hora no cálculo físico. O gráfico polar ilustrativo antigo foi removido para evitar referência solar incorreta.')

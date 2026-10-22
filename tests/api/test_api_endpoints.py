@@ -1,3 +1,5 @@
+import pytest
+pytestmark = pytest.mark.live
 #import pytest
 from fastapi.testclient import TestClient
 from api import app
@@ -18,7 +20,7 @@ def test_calculo_simples_sucesso():
         "orientacao": "Retrato"
     }
     response = client.post("/calcular", json=payload)
-    
+
     assert response.status_code == 200
     data = response.json()
     assert "kWh/m²/dia" in data
@@ -52,7 +54,7 @@ def test_calculo_arranjo_cache_performance():
         ]
     }
     response = client.post("/calcular-arranjo", json=payload)
-    
+
     assert response.status_code == 200
     data = response.json()
     assert data["total_placas"] == 2
@@ -63,13 +65,13 @@ def test_arredondamento_coordenadas():
     # Se o sistema arredonda para 4 casas, essas duas coordenadas devem ser idênticas para o motor
     coord1 = {"latitude": -7.12344, "longitude": -35.12344}
     coord2 = {"latitude": -7.12341, "longitude": -35.12341}
-    
+
     # Fazemos a primeira chamada (vai na NASA)
     res1 = client.post("/calcular", json={**coord1, "inclinacao_graus": 0, "azimute_graus": 0, "albedo_solo": 0.2, "distancia_centro_modulo_chao": 0.2})
-    
+
     # Fazemos a segunda chamada (deve ser instantânea via cache)
     res2 = client.post("/calcular", json={**coord2, "inclinacao_graus": 0, "azimute_graus": 0, "albedo_solo": 0.2, "distancia_centro_modulo_chao": 0.2})
-    
+
     assert res1.status_code == 200
     assert res2.status_code == 200
     # Como as coordenadas arredondadas são iguais, os resultados de HSP devem ser idênticos

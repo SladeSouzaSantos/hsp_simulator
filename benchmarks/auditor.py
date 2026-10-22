@@ -21,7 +21,7 @@ class SolarAuditor:
                 "altura_obstaculo": caso["h_obs"],
                 "distancia_obstaculo": caso["d_obs"],
                 "referencia_azimutal_obstaculo": caso["azi_obs"],
-                "largura_obstaculo": 10.0
+                "largura_obstaculo": caso.get("w_obs", 10.0)
             } if caso["h_obs"] > 0 else None
 
             # CORREÇÃO: Instancia o motor com os parâmetros fixos do teste

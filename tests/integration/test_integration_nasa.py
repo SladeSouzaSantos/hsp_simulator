@@ -1,4 +1,6 @@
 import pytest
+pytestmark = pytest.mark.live
+import pytest
 from services.providers.nasa_power_provider import NasaPowerProvider
 
 def test_nasa_provider_integrity():
@@ -8,10 +10,10 @@ def test_nasa_provider_integrity():
     """
     # 1. Setup do Provider
     provider = NasaPowerProvider()
-    
+
     # 2. Coordenadas de teste (Ex: Natal, RN - Alta radiação)
     lat, lon = -5.7945, -35.2110
-    
+
     # 3. Execução da chamada real
     try:
         data = provider.get_solar_data(lat, lon)
@@ -23,16 +25,16 @@ def test_nasa_provider_integrity():
     assert len(data["hsp_global"]) == 12, "Deveria conter 12 meses de dados."
     assert "hsp_diffuse" in data, "O campo 'hsp_diffuse' está ausente."
     assert "temp_max" in data, "Dados de temperatura ausentes."
-    
+
     # 5. Validação de Sanidade Numérica
-    # A NASA retorna kWh/m²/dia após o seu fator de correção (* 0.024)
+    # A média mensal diária em kWh/m²/dia é integrada das horas em W/m²
     for hsp in data["hsp_global"]:
         assert 1.0 <= hsp <= 10.0, f"Valor de HSP da NASA fora da realidade física: {hsp}"
 
     # 6. Validação de Metadados
     assert "metadata" in data
     assert "NASA" in data["metadata"]["source"]
-    
+
     print(f"\n✅ Integração NASA POWER OK! HSP Médio em Natal: {sum(data['hsp_global'])/12:.2f}")
 
 if __name__ == "__main__":

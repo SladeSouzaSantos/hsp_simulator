@@ -1,69 +1,43 @@
-import pytest
+"""Geographical regression using synthetic annual clear-sky input at EACH real city.
+
+The SunData fixture is only used to select city/tilt test cases, NOT to provide
+horizontal GHI for an inclined plane, which would invalidate the benchmark.
+These assertions check finite physical behavior, not agreement with SunData.
+"""
 import json
-import math
-from core.app import SolarEngine
+from pathlib import Path
+import pytest
+
+pytest.importorskip('pvlib')
 from core.perez_engines.perez_engine import PerezEngine
-from unittest.mock import MagicMock
+from tests.fixtures.hourly_weather import climate_fixture
 
-def carregar_dados_sundata():
-    """Carrega o arquivo de amostragem real"""
-    try:
-        with open("tests/fixtures/amostragem_sundata.json", "r", encoding="utf-8") as f:
-            return json.load(f)
-    except FileNotFoundError:
-        # Fallback caso o caminho mude em diferentes ambientes
-        return {}
+GEO = {
+    'Natal': (-5.79, -35.21),
+    'Caico': (-6.45, -37.09),
+    'Petrolina': (-9.38, -40.50),
+    'Manaus': (-3.11, -60.02),
+    'Porto Alegre': (-30.03, -51.23),
+    'Sao Jose dos Campos': (-23.17, -45.88),
+}
+FIXTURE_PATH = Path(__file__).parents[1] / 'fixtures' / 'amostragem_sundata.json'
+SUNDATA = json.loads(FIXTURE_PATH.read_text(encoding='utf-8'))
+CASES = [(city, int(tilt)) for city, inclinations in SUNDATA.items() for tilt in inclinations]
 
-# Criamos uma lista de casos de teste dinamicamente a partir do JSON
-sundata = carregar_dados_sundata()
-casos_teste = []
-for cidade, inclinacoes in sundata.items():
-    for inc_str, valores in inclinacoes.items():
-        casos_teste.append((cidade, int(inc_str), valores))
 
-@pytest.mark.parametrize("cidade, inclinacao, dados_hsp", casos_teste)
-def test_estresse_motor_com_cidades_reais(cidade, inclinacao, dados_hsp):
-    """
-    Testa se o motor de cálculo processa corretamente dados de cidades reais
-    em diferentes inclinações sem gerar erros numéricos.
-    """
-    # 1. Setup do motor (o repositório é mockado pois já temos os dados injetados via dados_pre)
-    repo_mock = MagicMock()
-    engine = SolarEngine(repository=repo_mock)
-    
-    # 2. Preparamos o pacote de dados Climatológicos no formato que o motor espera
-    meses_sd = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-    dados_pre = {
-        "hsp_global": [dados_hsp[m] for m in meses_sd],
-        "hsp_diffuse": [h * 0.3 for h in [dados_hsp[m] for m in meses_sd]], # Difusa estimada
-        "temp_max": [30.0] * 12,
-        "temp_avg": [26.0] * 12,
-        "temp_min": [18.0] * 12,
-        "wind_speed": [3.0] * 12
-    }
-
-    # 3. Criamos a PerezEngine injetando os parâmetros geográficos e técnicos
-    # Usamos uma latitude condizente com o Brasil para o teste de estresse
-    motor_perez = PerezEngine(
-        lat=-15.0, 
-        lon=-47.0, 
-        inclinacao_deg=inclinacao, 
-        azimute_deg=0,
-        albedo=0.2,
-        altura_instalacao=0.5,
-        tecnologia_celula="TOPCON",
-        is_bifacial=True
-    )
-
-    # 4. Execução do cálculo
-    # Agora passamos a instância motor_perez e os dados pré-carregados
-    resultado = engine.calcular_projeto_solar(
-        perez_engine=motor_perez,
-        dados_pre_carregados=dados_pre
-    )
-
-    # 5. Validações básicas de sanidade
-    assert "kWh/m²/dia" in resultado
-    assert "real" in resultado["kWh/m²/dia"]
-    assert len(resultado["kWh/m²/dia"]["real"]["mensal"]) == 12
-    assert isinstance(resultado["kWh/m²/dia"]["real"]["media"], float)
+@pytest.mark.parametrize('cidade,inclinacao', CASES)
+def test_estresse_motor_com_cidades_reais(cidade, inclinacao):
+    lat, lon = GEO[cidade]
+    climate = climate_fixture(lat, lon)
+    result = PerezEngine(
+        lat=lat, lon=lon, inclinacao_deg=inclinacao, azimute_deg=0,
+        albedo=0.2, is_bifacial=False,
+    ).calcular_hsp_corrigido_inc_azi(climate)
+    assert len(result['mensal']) == 12
+    assert all(0 < month < 15 for month in result['mensal'])
+    assert 0 < result['media'] < 15
+    assert result['hsp_traseira_equivalente_media'] == 0
+    if inclinacao == 0:
+        assert result['mensal'] == pytest.approx([
+            round(value, 3) for value in climate['hsp_global']
+        ], abs=0.001)

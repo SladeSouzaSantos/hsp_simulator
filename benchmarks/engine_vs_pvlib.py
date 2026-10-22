@@ -1,172 +1,249 @@
-import json
-import os
-import csv
+"""Benchmark horário: motor HSP x cálculo de referência direto com pvlib.
+
+Todos os cálculos de plano inclinado utilizam a MESMA série horária
+GHI/DHI/DNI em W/m². SunData é apenas referência climática externa:
+seus períodos, fontes e modelos podem diferir da NASA POWER/PVGIS.
+
+ATENÇÃO: ``perez_legacy`` é um alias do motor pvlib, não é mais um
+segundo modelo independente. Este benchmark verifica o *encadeamento*
+do motor contra uma chamada direta ao pvlib; não é validação PVsyst.
+"""
+
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+from typing import Iterable
+
+import numpy as np
 import pandas as pd
-from datetime import datetime
-from core.app import SolarEngine
-from core.solar_engine_factory import SolarPerezEngineFactory
+
+from core.perez_engines.perez_engine import PerezEngine
+from core.solar_physics import validate_weather
 from services.deps import Dependencies
 
-def run_mass_comparison():
-    # 1. Setup do Ambiente
-    repo = Dependencies.get_solar_repository()
-    # A SolarEngine aqui servirá como orquestradora se necessário
-    main_engine = SolarEngine(repository=repo)
-    
-    try:
-        with open('tests/fixtures/amostragem_sundata.json', 'r', encoding='utf-8') as f:
-            fixtures = json.load(f)
-    except FileNotFoundError:
-        print("[ERRO] Fixture SunData não encontrada.")
-        return
+ROOT = Path(__file__).resolve().parents[1]
+SUNDATA_FILE = ROOT / 'tests' / 'fixtures' / 'amostragem_sundata.json'
+OUTPUT_DIR = ROOT / 'benchmarks' / 'documents'
+CITIES = {
+    'Natal': (-5.79448, -35.21101),
+    'Caico': (-6.45, -37.09),
+    'Petrolina': (-9.38, -40.50),
+    'Manaus': (-3.11, -60.02),
+    'Porto Alegre': (-30.03, -51.23),
+    'Sao Jose dos Campos': (-23.17, -45.88),
+}
+TILTS_GRID = (0, 15, 20, 45, 90)
+AZIMUTHS_GRID = (0, 45, 90, 135, 180, 225, 270, 360)
 
-    # Cidades para teste de estresse
-    coordenadas = {
-        "Natal": {"lat": -5.79, "lon": -35.21},
-        "Caico": {"lat": -6.45, "lon": -37.09},
-        "Petrolina": {"lat": -9.38, "lon": -40.50},
-        "Manaus": {"lat": -3.11, "lon": -60.02},
-        "Porto Alegre": {"lat": -30.03, "lon": -51.23},
-        "Sao Jose dos Campos": {"lat": -23.17, "lon": -45.88}
-    }
 
-    report_data = []
-    meses_ordem = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-    
-    print("=" * 100)
-    print(f"{'Cidade':<15} | {'Inc':<3} | {'Gabarito':<8} | {'Sua Eng':<8} | {'PVLib':<8} | {'Erro Sua%':<9} | {'Erro PVL%'}")
-    print("-" * 100)
+def _pvlib_reference_hsp(hourly: pd.DataFrame, lat: float, lon: float,
+                         tilt: float, azimuth: float, *, albedo: float = 0.2) -> float:
+    """Referência direta ao pvlib, sem chamar SolarEngine ou compute_poa.
 
-    for cidade, coords in coordenadas.items():
-        if cidade not in fixtures: continue
-        
-        # Busca dados reais via Repositório (NASA/INPE)
-        dados_base_0 = fixtures[cidade]["0"]
+    Repete DELIBERADAMENTE as mesmas convenções horárias usadas no motor:
+    timestamps UTC marcando início de cada intervalo, posição a +30 min,
+    irradiâncias em W/m², integração dos dias completos de 24 horas.
+    Assim verifica o contrato/encadeamento da aplicação, não a física do
+    próprio algoritmo Perez da biblioteca, que é compartilhado.
+    """
+    import pvlib
 
-        dados_clima = {
-            "hsp_global": [float(dados_base_0[m]) for m in meses_ordem],
-            "hsp_diffuse": [float(dados_base_0[m]) * 0.3 for m in meses_ordem], # Estimativa de difusa
-            "temp_max": [30.0] * 12,
-            "wind_speed": [3.0] * 12
-        }
-        
-        for inc_str, dados_gabarito in fixtures[cidade].items():
-            inc = int(inc_str)
-            
-            # --- TRATAMENTO DO GABARITO ---
-            if isinstance(dados_gabarito, dict):
-                # Prioriza a chave "Anual" que existe no seu JSON
-                if "Anual" in dados_gabarito:
-                    hsp_real = float(dados_gabarito["Anual"])
-                else:
-                    # Fallback caso a chave mude (calcula média dos meses numéricos)
-                    meses_vals = [v for k, v in dados_gabarito.items() if k != "Anual" and isinstance(v, (int, float))]
-                    hsp_real = sum(meses_vals) / len(meses_vals) if meses_vals else 0
-            else:
-                hsp_real = float(dados_gabarito)
+    weather = validate_weather(hourly)
+    if tilt == 0:
+        poa = weather['ghi'].to_numpy(dtype=float)
+    else:
+        midpoint = weather.index + pd.Timedelta(minutes=30)
+        sol = pvlib.location.Location(lat, lon, tz='UTC').get_solarposition(midpoint)
+        zenith = sol['apparent_zenith'].to_numpy(dtype=float)
+        sun_azimuth = sol['azimuth'].to_numpy(dtype=float)
+        result = pvlib.irradiance.get_total_irradiance(
+            surface_tilt=tilt,
+            surface_azimuth=azimuth,
+            solar_zenith=zenith,
+            solar_azimuth=sun_azimuth,
+            dni=weather['dni'].to_numpy(dtype=float),
+            ghi=weather['ghi'].to_numpy(dtype=float),
+            dhi=weather['dhi'].to_numpy(dtype=float),
+            dni_extra=np.asarray(pvlib.irradiance.get_extra_radiation(midpoint)),
+            airmass=np.asarray(pvlib.atmosphere.get_relative_airmass(zenith)),
+            albedo=albedo,
+            model='perez',
+        )
+        poa = np.clip(
+            np.nan_to_num(np.asarray(result['poa_global'], dtype=float), nan=0., posinf=0.),
+            0., None,
+        )
+    hourly_poa = pd.Series(poa, index=weather.index)
+    per_day = hourly_poa.resample('D').sum().div(1000.)
+    complete_days = hourly_poa.resample('D').count() == 24
+    if not complete_days.any():
+        raise ValueError('Não há dias completos na série meteorológica')
+    return float(per_day.loc[complete_days].mean())
 
-            # --- MOTOR 1: SUA IMPLEMENTAÇÃO (PEREZ NATIVO) ---
-            engine_type = SolarPerezEngineFactory.get_engine_type(motor_type="perez_legacy")
-            my_perez = engine_type(lat=coords['lat'], lon=coords['lon'], inclinacao_deg=inc, azimute_deg=0)
-            res_my = my_perez.calcular_hsp_corrigido_inc_azi(dados_clima)
-            hsp_my = res_my["media"]
 
-            # --- MOTOR 2: PVLIB WRAPPER ---
-            pvlib_type = SolarPerezEngineFactory.get_engine_type(motor_type="perez_pvlib")
-            pv_perez = pvlib_type(lat=coords['lat'], lon=coords['lon'], inclinacao_deg=inc, azimute_deg=0)
-            res_pv = pv_perez.calcular_hsp_corrigido_inc_azi(dados_clima)
-            hsp_pv = res_pv["media"]
+def _load_hourly(repo, lat: float, lon: float, source: str,
+                 synthetic: bool) -> dict:
+    if synthetic:
+        # Somente ensaio determinístico, NUNCA comparação científica com SunData.
+        from tests.fixtures.hourly_weather import climate_fixture
+        return climate_fixture(lat, lon)
+    return repo.get_standardized_data(lat, lon, force_provider=source)
 
-            # --- CÁLCULO DE ERROS ---
-            erro_my = ((hsp_my - hsp_real) / hsp_real) * 100
-            erro_pv = ((hsp_pv - hsp_real) / hsp_real) * 100
 
-            print(f"{cidade:<15} | {inc:>3}° | {hsp_real:<8.2f} | {hsp_my:<8.2f} | {hsp_pv:<8.2f} | {erro_my:>+8.2f}% | {erro_pv:>+8.2f}%")
+def _run_engine(climate: dict, lat: float, lon: float,
+                tilt: int, azimuth: int) -> float:
+    engine = PerezEngine(lat=lat, lon=lon, inclinacao_deg=tilt,
+                         azimute_deg=azimuth, model='perez', albedo=0.2,
+                         is_bifacial=False)
+    return float(engine.calcular_hsp_corrigido_inc_azi(climate)['media'])
 
-            report_data.append({
-                "Cidade": cidade,
-                "Inclinacao": inc,
-                "HSP_SunData": round(hsp_real, 3),
-                "HSP_Minha_Engine": round(hsp_my, 3),
-                "HSP_PVLib": round(hsp_pv, 3),
-                "Erro_Minha_Pct": round(erro_my, 2),
-                "Erro_PVLib_Pct": round(erro_pv, 2)
-            })
 
-    # --- EXPORTAÇÃO ---
-    doc_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "documents")
-    os.makedirs(doc_dir, exist_ok=True)
-    df = pd.DataFrame(report_data)
-    df.to_csv(os.path.join(doc_dir, "BENCHMARK_ENGINE_VS_PVLIB.csv"), index=False)
-    
-    print("-" * 100)
-    print(f"📊 Média Erro Absoluto (Sua): {df['Erro_Minha_Pct'].abs().mean():.2f}%")
-    print(f"📊 Média Erro Absoluto (PVLib): {df['Erro_PVLib_Pct'].abs().mean():.2f}%")
+def _pct(value: float, reference: float) -> float:
+    return 100. * (value / reference - 1.) if reference else float('nan')
 
-def run_legacy_vs_pvlib_stress_test():
-    # 1. Configuração de Variáveis e Step
-    step = 5 # Variável de controle de resolução
-    azimutes = range(0, 361, step)
-    inclinacoes = range(0, 91, step)
-    
-    coordenadas = {
-        "Natal": {"lat": -5.79, "lon": -35.21},
-        "Caico": {"lat": -6.45, "lon": -37.09},
-        "Petrolina": {"lat": -9.38, "lon": -40.50},
-        "Manaus": {"lat": -3.11, "lon": -60.02},
-        "Porto Alegre": {"lat": -30.03, "lon": -51.23},
-        "Sao Jose dos Campos": {"lat": -23.17, "lon": -45.88}
-    }
 
-    # 2. Setup do Repositório (NASA POWER)
-    repo = Dependencies.get_solar_repository()
-    report_data = []
+def run_mass_comparison(*, cities: Iterable[str] | None = None,
+                        source: str = 'NASA POWER',
+                        synthetic: bool = False,
+                        repository=None,
+                        output_dir: Path = OUTPUT_DIR) -> pd.DataFrame:
+    """Compara casos SunData contra a transposição em dados horários reais.
 
-    print(f"🚀 Iniciando Comparativo: Legacy vs PVLib | Step: {step}°")
-    print("=" * 90)
-    print(f"{'Cidade':<15} | {'Azi':<4} | {'Inc':<4} | {'Legacy':<8} | {'PVLib':<8} | {'Delta %'}")
-    print("-" * 90)
+    A comparação com SunData usa duas métricas: desvio absoluto (mistura
+    diferenças meteorológicas e de modelos) e desvio após normalização pelo
+    GHI horizontal do próprio SunData (isola parcialmente o fator de transposição).
+    """
+    import json
+    with SUNDATA_FILE.open(encoding='utf-8') as file:
+        sundata = json.load(file)
+    repo = repository if repository is not None else Dependencies.get_solar_repository()
+    selected = list(CITIES) if cities is None else list(cities)
+    rows = []
 
-    for cidade, coords in coordenadas.items():
-        # Busca dados da NASA uma única vez por cidade
-        dados_clima = repo.get_standardized_data(coords['lat'], coords['lon'])
-        
-        for azi in azimutes:
-            for inc in inclinacoes:
-                # --- MOTOR 1: PEREZ LEGACY ---
-                legacy_type = SolarPerezEngineFactory.get_engine_type(motor_type="perez_legacy")
-                engine_legacy = legacy_type(lat=coords['lat'], lon=coords['lon'], inclinacao_deg=inc, azimute_deg=azi)
-                hsp_legacy = engine_legacy.calcular_hsp_corrigido_inc_azi(dados_clima)["media"]
+    print('=' * 114)
+    print('HSP SIMULATOR — comparativo horário: engine x pvlib; SunData como referência EXTERNA')
+    print(f'Fonte: {"CÉU CLARO SINTÉTICO — NÃO VALIDAR PRECISÃO" if synthetic else source}; Perez; monofacial; albedo 0,20; azimute 0°=Norte')
+    print(f'{"Cidade":<20} {"Inc":>4} {"SunData":>9} {"Engine":>9} {"PVLib":>9} {"Delta E-P":>11} {"Erro SD":>10} {"Erro Transp":>12}')
+    print('-' * 114)
+    for city in selected:
+        if city not in CITIES:
+            raise ValueError(f'Cidade inválida: {city}; opções: {list(CITIES)}')
+        if city not in sundata:
+            print(f'[AVISO] Sem dados SunData para {city}; ignorando.')
+            continue
+        lat, lon = CITIES[city]
+        # OBTENÇÃO UMA VEZ POR CIDADE; mantém hourly até o fim.
+        climate = _load_hourly(repo, lat, lon, source, synthetic)
+        if 'hourly' not in climate:
+            raise ValueError(f'Fonte {source} não forneceu série horária para {city}; não é válido usar médias mensais')
+        weather = validate_weather(climate['hourly'])
+        weather_source = climate.get('metadata', {}).get('source', source)
+        ghi_horizontal = float(weather['ghi'].resample('D').sum().div(1000.).loc[
+            weather['ghi'].resample('D').count() == 24].mean())
+        sundata_horizontal = float(sundata[city]['0']['Anual'])
+        for tilt_text, sd in sundata[city].items():
+            tilt = int(tilt_text)
+            target = float(sd['Anual'])
+            hsp_engine = _run_engine(climate, lat, lon, tilt, 0)
+            hsp_reference = _pvlib_reference_hsp(weather, lat, lon, tilt, 0)
+            scaled_to_sundata = sundata_horizontal * hsp_engine / ghi_horizontal
+            row = {
+                'Cidade': city,
+                'Latitude': lat,
+                'Longitude': lon,
+                'Inclinacao': tilt,
+                'Azimute_Geografico': 0,
+                'Fonte_Meteorologica': weather_source,
+                'Anos': climate.get('metadata', {}).get('years', 'fixture sintética'),
+                'HSP_SunData': round(target, 3),
+                'HSP_Horizontal_Fonte': round(ghi_horizontal, 4),
+                'HSP_Minha_Engine': round(hsp_engine, 3),
+                'HSP_PVLib': round(hsp_reference, 3),
+                'Delta_Engine_PVLib_Pct': round(_pct(hsp_engine, hsp_reference), 3),
+                'Erro_Engine_vs_SunData_Pct': round(_pct(hsp_engine, target), 2),
+                'HSP_Escala_SunData_GHI': round(scaled_to_sundata, 3),
+                'Erro_Fator_Transposicao_SunData_Pct': round(_pct(scaled_to_sundata, target), 2),
+                'Dados_Sinteticos': synthetic,
+            }
+            rows.append(row)
+            print(f'{city:<20} {tilt:>3}° {target:>9.3f} {hsp_engine:>9.3f} {hsp_reference:>9.3f} '
+                  f'{row["Delta_Engine_PVLib_Pct"]:>+10.3f}% '
+                  f'{row["Erro_Engine_vs_SunData_Pct"]:>+9.2f}% '
+                  f'{row["Erro_Fator_Transposicao_SunData_Pct"]:>+11.2f}%')
+    if not rows:
+        raise RuntimeError('Nenhum cenário executado; CSV não será criado.')
+    table = pd.DataFrame(rows)
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    path = output_dir / 'BENCHMARK_ENGINE_VS_PVLIB.csv'
+    table.to_csv(path, index=False, encoding='utf-8-sig')
+    print('-' * 114)
+    print('MAE Engine vs pvlib (p.p.):', round(table['Delta_Engine_PVLib_Pct'].abs().mean(), 3))
+    print('MAE vs SunData (%, bases meteorológicas distintas):',
+          round(table['Erro_Engine_vs_SunData_Pct'].abs().mean(), 2))
+    print('MAE de fator de transposição vs SunData (%):',
+          round(table['Erro_Fator_Transposicao_SunData_Pct'].abs().mean(), 2))
+    print('Relatório:', path)
+    return table
 
-                # --- MOTOR 2: PEREZ PVLIB ---
-                pvlib_type = SolarPerezEngineFactory.get_engine_type(motor_type="perez_pvlib")
-                engine_pvlib = pvlib_type(lat=coords['lat'], lon=coords['lon'], inclinacao_deg=inc, azimute_deg=azi)
-                hsp_pvlib = engine_pvlib.calcular_hsp_corrigido_inc_azi(dados_clima)["media"]
 
-                # Cálculo de divergência entre os motores
-                delta_pct = ((hsp_legacy - hsp_pvlib) / hsp_pvlib) * 100 if hsp_pvlib > 0 else 0
+def run_orientation_grid(*, city: str = 'Natal', source: str = 'NASA POWER',
+                         synthetic: bool = False, repository=None,
+                         output_dir: Path = OUTPUT_DIR) -> pd.DataFrame:
+    """40 combinações independentes do slider, cruzadas com pvlib direto."""
+    if city not in CITIES:
+        raise ValueError('Cidade inválida: ' + city)
+    repo = repository if repository is not None else Dependencies.get_solar_repository()
+    lat, lon = CITIES[city]
+    climate = _load_hourly(repo, lat, lon, source, synthetic)
+    if 'hourly' not in climate:
+        raise ValueError('Benchmark de orientação exige GHI/DHI/DNI horários (W/m²).')
+    hourly = validate_weather(climate['hourly'])
+    rows = []
+    for tilt in TILTS_GRID:
+        for azimuth in AZIMUTHS_GRID:
+            engine = _run_engine(climate, lat, lon, tilt, azimuth)
+            ref = _pvlib_reference_hsp(hourly, lat, lon, tilt, azimuth)
+            rows.append({'Cidade':city, 'Inclinacao':tilt, 'Azimute':azimuth,
+                         'HSP_Engine':round(engine,3), 'HSP_PVLib':round(ref,3),
+                         'Delta_Engine_PVLib_Pct':round(_pct(engine, ref),3),
+                         'Fonte_Meteorologica':climate.get('metadata',{}).get('source', source),
+                         'Dados_Sinteticos':synthetic})
+    table = pd.DataFrame(rows)
+    for tilt in TILTS_GRID:
+        values = table.loc[table['Inclinacao'] == tilt].set_index('Azimute')['HSP_Engine']
+        if abs(float(values.loc[0]) - float(values.loc[360])) > 0.001:
+            raise AssertionError(f'0° != 360° para inclinação={tilt}')
+        if tilt == 0 and values.max() - values.min() > 0.001:
+            raise AssertionError('Plano horizontal varia com azimute')
+    out = Path(output_dir) / 'BENCHMARK_ORIENTACOES_ENGINE_VS_PVLIB.csv'
+    out.parent.mkdir(parents=True,exist_ok=True)
+    table.to_csv(out, index=False, encoding='utf-8-sig')
+    print('\nMatriz de orientação — ' + city)
+    print(table.pivot(index='Inclinacao', columns='Azimute', values='HSP_Engine').to_string())
+    print('40 cenários; plano horizontal e 0°=360°: OK. Relatório:', out)
+    return table
 
-                report_data.append({
-                    "Cidade": cidade,
-                    "Azimute": azi,
-                    "Inclinacao": inc,
-                    "HSP_Legacy": round(hsp_legacy, 3),
-                    "HSP_PVLib": round(hsp_pvlib, 3),
-                    "Divergencia_Pct": round(delta_pct, 2)
-                })
 
-        print(f"✅ {cidade} finalizada.")
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--city', choices=tuple(CITIES), help='Cidade específica (padrão: todas)')
+    parser.add_argument('--source', default='NASA POWER', choices=('NASA POWER', 'PVGIS'),
+                        help='Fonte horária explícita; evita fallback silencioso')
+    parser.add_argument('--synthetic', action='store_true',
+                        help='Usa céu claro sintético para verificar o código, não para validação científica')
+    parser.add_argument('--grid', action='store_true',
+                        help='Além do SunData, executa 40 orientações da cidade selecionada (padrão Natal)')
+    args = parser.parse_args(argv)
+    run_mass_comparison(cities=[args.city] if args.city else None,
+                        source=args.source, synthetic=args.synthetic)
+    if args.grid:
+        run_orientation_grid(city=args.city or 'Natal', source=args.source,
+                             synthetic=args.synthetic)
+    print('\nNOTA: PerezEngine e PerezEnginePVLib hoje usam a MESMA implementação pvlib. '
+          'Concordância neste relatório NÃO equivale à validação independente com PVsyst.')
 
-    # 3. Exportação para CSV
-    df = pd.DataFrame(report_data)
-    output_path = "benchmarks/documents/COMPARATIVO_LEGACY_VS_PVLIB_NASA.csv"
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    df.to_csv(output_path, index=False)
 
-    print("-" * 90)
-    print(f"📊 Relatório gerado em: {output_path}")
-    print(f"🔍 Divergência Média Global: {df['Divergencia_Pct'].abs().mean():.2f}%")
-
-if __name__ == "__main__":
-    run_mass_comparison()
-    run_legacy_vs_pvlib_stress_test()
+if __name__ == '__main__':
+    main()

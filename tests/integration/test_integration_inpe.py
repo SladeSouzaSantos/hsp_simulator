@@ -2,6 +2,8 @@ import pytest
 import os
 from services.providers.inpe_labren_provider import InpeLabrenProvider
 
+pytest.importorskip("pyarrow", reason="INPE Parquet requires pyarrow")
+
 def test_inpe_provider_integrity():
     """
     Valida a integridade do provedor INPE/LABREN.
@@ -9,10 +11,10 @@ def test_inpe_provider_integrity():
     """
     # 1. Setup do Provider
     provider = InpeLabrenProvider()
-    
+
     # 2. Coordenadas de teste (Ex: São José dos Campos - Sede do INPE)
     lat, lon = -23.1791, -45.8872
-    
+
     # 3. Execução da busca (Leitura do Parquet + Processamento)
     try:
         data = provider.get_solar_data(lat, lon)
@@ -25,7 +27,7 @@ def test_inpe_provider_integrity():
     assert "hsp_global" in data, "O campo 'hsp_global' está ausente."
     assert len(data["hsp_global"]) == 12, "Deveria conter 12 meses de dados."
     assert "hsp_diffuse" in data, "O campo 'hsp_diffuse' está ausente."
-    
+
     # 5. Validação de Sanidade Numérica (Valores típicos para o Brasil)
     for hsp in data["hsp_global"]:
         # O Brasil tem radiação alta, geralmente entre 3.0 e 7.0 HSP
@@ -35,7 +37,7 @@ def test_inpe_provider_integrity():
     assert "metadata" in data
     assert "INPE/LABREN" in data["metadata"]["source"]
     assert "2017" in data["metadata"]["source"]
-    
+
     print(f"\n✅ Integração INPE/LABREN OK! HSP Médio em SJC: {sum(data['hsp_global'])/12:.2f}")
 
 def test_inpe_provider_out_of_bounds():
@@ -44,7 +46,7 @@ def test_inpe_provider_out_of_bounds():
     """
     provider = InpeLabrenProvider()
     lat, lon = 51.5074, -0.1278 # Londres
-    
+
     with pytest.raises(ValueError, match="fora da cobertura"):
         provider.get_solar_data(lat, lon)
 
