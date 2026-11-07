@@ -43,7 +43,9 @@ def test_pdf_does_not_accept_claims_of_calibrated_yield():
 
 def test_pdf_rejects_inconsistent_months_and_invalid_numbers():
     data = payload()
-    data["mppts"][0]["monthly"][0]["month_utc"] = 2
+    data["mppts"][0]["monthly"] = [
+        {**data["mppts"][0]["monthly"][0], "month_utc": 2}
+    ]
     assert client.post("/solar3d/losses/report/pdf", json=data).status_code == 422
     data = payload()
     data["summary"]["dc_reference_kwh"] = -1
