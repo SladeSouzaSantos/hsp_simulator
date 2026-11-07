@@ -21,6 +21,7 @@ from solar3d.backend.electrical import (
     ElectricalValidationRequest, check_electrical_design,
 )
 from solar3d.backend.catalog import GreencityExport, preview_import
+from solar3d.backend.iv_experiment import IvExperimentRequest, iv_experiment
 
 app = FastAPI(
     title="Solar 3D Lab — solar geometry and direct-beam shading",
@@ -201,3 +202,9 @@ def electrical_validate(request: ElectricalValidationRequest) -> dict:
 def greencity_catalog_preview(request: GreencityExport) -> dict:
     """Staged import only. Incomplete catalog records are blocked, never guessed."""
     return preview_import(request)
+
+
+@app.post("/solar3d/electrical/iv-experiment")
+def electrical_iv_experiment(request: IvExperimentRequest) -> dict:
+    """Generic cell-level reference experiment (not calibrated)."""
+    return iv_experiment(request)
