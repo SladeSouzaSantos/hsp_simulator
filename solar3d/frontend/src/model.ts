@@ -1,4 +1,6 @@
 /** Metres in a local tangent plane: east=X, north=Z, elevation=Y in Three.js. */
+import { defaultElectricalDesign, parseElectricalDesign } from "./electrical";
+import type { ElectricalDesign } from "./electrical";
 export type SceneKind = "building" | "obstacle" | "panel";
 export type Position = { east: number; north: number; elevation: number };
 export type SceneObject = {
@@ -49,11 +51,12 @@ export const INITIAL_OBJECTS: SceneObject[] = [
 ];
 
 export type SolarProject = {
-  schema_version: 1;
+  schema_version: 2;
   latitude: number;
   longitude: number;
   timezone: string;
   objects: SceneObject[];
+  electrical: ElectricalDesign;
 };
 
 const finite = (value: unknown): value is number =>
@@ -62,7 +65,8 @@ const finite = (value: unknown): value is number =>
 export function parseProject(raw: unknown): SolarProject {
   if (!raw || typeof raw !== "object") throw new Error("Projeto inválido.");
   const data = raw as Record<string, unknown>;
-  if (data.schema_version !== 1 || !finite(data.latitude) || !finite(data.longitude) ||
+  if ((data.schema_version !== 1 && data.schema_version !== 2) ||
+      !finite(data.latitude) || !finite(data.longitude) ||
       Math.abs(data.latitude) > 90 || Math.abs(data.longitude) > 180 ||
       typeof data.timezone !== "string" || data.timezone.length > 128 ||
       !Array.isArray(data.objects) || data.objects.length > 250) {
@@ -86,7 +90,20 @@ export function parseProject(raw: unknown): SolarProject {
     }
     ids.add(obj.id);
   }
-  return data as SolarProject;
+  // v1 files predate the electrical topology. Migrate without silently
+  // connecting any module; the user must explicitly approve wiring.
+  const objects = data.objects as SceneObject[];
+  const electrical = data.schema_version === 1
+    ? defaultElectricalDesign(objects, false)
+    : parseElectricalDesign(data.electrical);
+  return {
+    schema_version: 2,
+    latitude: data.latitude as number,
+    longitude: data.longitude as number,
+    timezone: data.timezone as string,
+    objects,
+    electrical,
+  };
 }
 
 export function makeObject(kind: SceneKind, index: number): SceneObject {
