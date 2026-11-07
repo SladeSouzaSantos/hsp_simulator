@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { CatalogImporter } from "./CatalogImporter";
+import { IvExperimentPanel } from "./IvExperimentPanel";
 import type { SceneObject } from "./model";
 import type { ElectricalDesign, ElectricalResult, ElectricalString, InverterSpec,
   ModuleSpec, MpptSpec } from "./electrical";
@@ -360,6 +361,7 @@ export function ElectricalPanel({ objects, design, onChange, selectedId,
         {validating ? "Validando conexões…" : "Validar arranjo elétrico"}
       </button>
       {error && <p className="error-message" role="alert">{error}</p>}
+      <IvExperimentPanel />
       {result && <div className="electrical-result">
         <strong className={result.status === "invalid" ? "electrical-invalid" : "electrical-warning"}>
           {result.status === "invalid" ? "Configuração incompatível" :

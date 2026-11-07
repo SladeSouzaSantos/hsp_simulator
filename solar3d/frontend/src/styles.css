@@ -225,3 +225,8 @@ h2, p { margin: 0; }
   .energy-report .electrical-metrics > div,
   .energy-tabular > div, .energy-bar-track { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
 }
+
+.iv-experiment { margin-top: 20px; padding-top: 7px; border-top: 1px solid #355260; }
+.iv-experiment > button { width: 100%; margin: 8px 0; }
+.iv-plot { background: #132934; border: 1px solid #35586b; border-radius: 8px; padding: 9px; margin: 9px 0; }
+.iv-plot strong { font-size: 11px; }
