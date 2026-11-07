@@ -25,6 +25,7 @@ from solar3d.backend.catalog import GreencityExport, preview_import
 from solar3d.backend.iv_experiment import IvExperimentRequest, iv_experiment
 from solar3d.backend.energy import EnergyRequest, simulate_energy
 from solar3d.backend.reports import ReportRequest, render_pdf
+from solar3d.backend.monthly_losses import MonthlyLossRequest, monthly_losses
 
 app = FastAPI(
     title="Solar 3D Lab — solar geometry and direct-beam shading",
@@ -238,3 +239,16 @@ def energy_pdf_report(request: ReportRequest):
         media_type="application/pdf",
         headers={"Content-Disposition": 'attachment; filename="solar3d-relatorio.pdf"'},
     )
+
+
+@app.post("/solar3d/losses/monthly")
+def estimated_monthly_string_mppt_losses(request: MonthlyLossRequest) -> dict:
+    """Experimental DC energy loss by series string and common-voltage MPPT."""
+    from fastapi import HTTPException
+    import requests
+    try:
+        return monthly_losses(request)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except (RuntimeError, OSError, requests.RequestException) as exc:
+        raise HTTPException(status_code=503, detail="Fonte meteorológica indisponível") from exc
