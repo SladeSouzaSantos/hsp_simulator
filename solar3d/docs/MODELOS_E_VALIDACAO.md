@@ -130,3 +130,31 @@ Os testes incluem exemplos geométricos (módulo sem sombra, obstáculo total,
 meia sombra, triângulos), limites elétricos, importação bloqueada, curvas
 PVMismatch, serie meteorológica de 24h, coerência da energia de referência
 e exportação PDF. Faltam ensaios de campo de equipamentos reais.
+
+---
+
+## Incremento implementado: F5.2 (estimativas DC por MPPT)
+
+A API `/solar3d/losses/monthly` agrega os obstáculos F3 e os dados horários
+POA numa **curva I–V aproximada por substring**. Resolve a corrente comum
+dos módulos em série e a tensão comum das strings paralelas por MPPT.
+Gera diferenças mensais em kWh DC e %, individuais por MPPT e para strings
+em operação isolada hipotética. Os cenários mantêm meteorologia e
+equipamentos idênticos, variando apenas o bloqueio geométrico externo.
+
+O modelo tem versão `F5_2_MONTHLY_STRING_MPPT_PIECEWISE_IV_V1`,
+`calibrated=false` e `validated_electrical_yield=false`.
+A hipótese de três substrings genéricas precisa de aceite explícito.
+As máscaras F3 usam 3/6 linhas × 2/4 colunas. A razão de energias mensais
+substitui qualquer média indevida de porcentagens de área bloqueada.
+
+**Limitações que ainda bloqueiam a homologação de engenharia:**
+topologia real de substrings/half-cut, curva I–V ajustada por
+datasheet/curva de ensaio, número/queda dos diodos reais, curva
+de rendimento do inversor, MPPT com eficiência/dinâmica, sombra difusa
+e validação cruzada. A perda percentual final é uma **estimativa
+DC preliminar**, não uma perda AC bancável.
+
+Os testes adicionais exercitam cenário sem sombra, sombra total/parcial,
+ligações paralelas com ponto de operação comum, impacto específico de
+um MPPT, consentimento obrigatório e exportação PDF.

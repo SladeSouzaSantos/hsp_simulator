@@ -100,6 +100,104 @@ module temperature estimates, spectral/irradiance effects, bypass diodes,
 I–V curves, electrical mismatch, MPPT control efficiency, actual DC/AC
 production or annual energy losses. These require later engineering phases.
 
+## F5.2 — perdas mensais por string e MPPT (aproximação elétrica)
+
+**Objetivo funcional:** responder qual a perda energética mensal por MPPT
+decorrente de obstáculos 3D e permitir comparar a reorganização das strings.
+
+No painel **Energia → Perdas por MPPT**, selecione NASA POWER ou PVGIS,
+confirme a utilização experimental de dados eventualmente não verificados
+e aceite explicitamente a hipótese de **três substrings genéricas**.
+Clique em **Calcular perdas mensais por MPPT**. Abra cada MPPT para
+consultar perdas mensais em kWh DC e %, e cada string para examinar
+seu MPP hipotético individual. Os relatórios podem ser exportados
+como CSV, JSON e PDF (documentos não certificados).
+
+### Contrato API
+
+`POST /solar3d/losses/monthly` utiliza os mesmos campos de
+`POST /solar3d/energy/simulate`, com alterações importantes:
+
+- `sample_rows: 3 | 6` (cada terço do comprimento modela uma substring
+  hipotética); `sample_columns: 2 | 4`;
+- `assume_generic_three_substrings: true` é uma confirmação **obrigatória**;
+- `allow_unverified_for_research` deve ser habilitado se os equipamentos
+  não estiverem individualmente conferidos nos datasheets;
+- `objects`, `meshes` e `design` são os mesmos do projeto 3D;
+- `source` usa `nasa-power`, `pvgis-tmy`, ou `uploaded` com `weather`
+  horário, ordenado e contínuo.
+
+A resposta contém `model: F5_2_MONTHLY_STRING_MPPT_PIECEWISE_IV_V1`,
+`calibrated: false`, `validated_electrical_yield: false`,
+`summary`, `monthly[]`, `strings[].monthly[]` e
+`mppts[].monthly[]`, todos com:
+
+```json
+{
+  "month_utc": 1,
+  "hours": 744,
+  "reference_kwh": 104.2,
+  "shaded_kwh": 95.6,
+  "loss_kwh": 8.6,
+  "loss_percent": 8.2534
+}
+```
+
+**Atenção:** os valores acima ilustram somente a estrutura JSON; não
+foram obtidos de uma simulação. A soma mensal é a integração horária
+`Σ(P_W × 1h)/1000`. O percentual é `100 × (E_ref-E_sombra)/E_ref`,
+calculado a partir das **energias do mesmo mês**, não de uma média
+de porcentagens de sombra. Meses ausentes não são preenchidos como zero,
+e séries parciais não são anualizadas.
+
+### Modelo elétrico e limitações
+
+- Cada módulo possui três substrings genéricas iguais de 1/3 do comprimento.
+  A localização de diodos/células **não** corresponde necessariamente a
+  módulos half-cut, TOPCon, HJT ou outros datasheets reais.
+- Para cada substring, usa-se curva I–V **aproximada e ancorada em
+  Voc/Vmp/Isc/Imp**, com correções térmicas e aproximação logarítmica
+  de tensão sob irradiância baixa; a tensão em bypass é limitada
+  por hipótese a -0,55 V. **Não** equivale a um ajuste físico por diodo.
+- Um módulo divide sua curva por 3 substrings em série; os módulos
+  de uma string compartilham corrente, enquanto strings em paralelo
+  no mesmo MPPT compartilham tensão. Para cada instante, procura-se
+  o máximo aproximado de P(V) sobre uma malha de tensões permitida.
+- O limite de corrente do MPPT é uma aproximação de saturação ideal;
+  não resolve tensão de partida, energia de arranque, curva de eficiência
+  real, limites por entrada física, clipping do inversor nem histerese
+  do algoritmo MPPT.
+- A perda por string apresentada refere-se ao **MPP individual hipotético**
+  da string desconectada das demais. Sua energia não é uma partição
+  da energia efetiva do MPPT quando existem strings paralelas.
+- **A perda por MPPT** é obtida do ponto de operação comum calculado
+  para todas as strings nele conectadas.
+- Os resultados são de **energia DC estimada**, não de energia AC certificada.
+  A redução de área sombreada não foi confundida com redução linear
+  da potência elétrica: o motor utiliza curvas/ligação, ainda que
+  aproximadas.
+- Os resultados precisam de **calibração por fabricante, topologia
+  física das células, análise de convergência e comparação com dados
+  medidos/PVsyst** antes de servir a decisões comerciais.
+
+### Comparação de estratégias
+
+Na mesma aba, execute uma análise, clique em **Salvar como cenário A**,
+edite as ligações em **Elétrica** e execute novamente. A comparação
+é apresentada somente quando localização, fonte, ano e período
+meteorológico permanecem alinhados. A diferença em kWh indica se
+a alternativa reduziu ou aumentou a perda DC estimada.
+
+`POST /solar3d/losses/report/pdf` transforma o retorno em um relatório
+de MPPTs e strings, com declaração explícita de não calibração e
+de que os dados enviados do navegador não são autenticados no servidor.
+Não é laudo ou memorial de cálculo executivo.
+
+**Próxima condição de aceite:** implementar a topologia
+física de diodos/substrings do modelo real e comparar curvas
+medidas/fornecidas pelo fabricante, antes de rotular os fatores
+como perdas elétricas validadas.
+
 ## Run locally
 
 Requires Python 3.11–3.13 and Node.js 20.19+ (Node.js 24 recommended).
