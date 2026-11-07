@@ -8,19 +8,24 @@ import { sunVector } from "./solarMath";
 import { ShadingPanel } from "./ShadingPanel";
 import type { ShadingDayResult } from "./shadingModel";
 import { activeShading } from "./shadingModel";
+import { ElectricalPanel } from "./ElectricalPanel";
+import { assignPanelToString, defaultElectricalDesign,
+  deleteModuleFromDesign, registerModule } from "./electrical";
+import type { ElectricalDesign } from "./electrical";
 
 const degrees = (value: number) => value * Math.PI / 180;
 const todayFortaleza = () => new Date().toLocaleDateString("sv-SE", { timeZone: "America/Fortaleza" });
 const showDegrees = (value: number) => value.toFixed(1) + "°";
 
-function SceneShape({ object, selected, onSelect, blockedFraction }: {
+function SceneShape({ object, selected, onSelect, blockedFraction, wireColor }: {
   object: SceneObject;
   selected: boolean;
   onSelect: (id: string) => void;
   blockedFraction: number | null;
+  wireColor: string | null;
 }) {
   const isPanel = object.kind === "panel";
-  const color = isPanel ? (selected ? "#22cfc7" :
+  const color = isPanel ? (selected ? "#22cfc7" : wireColor !== null ? wireColor :
     blockedFraction === null ? "#215f95" :
     blockedFraction >= 0.75 ? "#d65c4e" :
     blockedFraction >= 0.35 ? "#d3a352" :
@@ -47,13 +52,16 @@ function SceneShape({ object, selected, onSelect, blockedFraction }: {
   );
 }
 
-function SolarScene({ objects, selectedId, onSelect, sun, shadingResult, sampleIndex }: {
+function SolarScene({ objects, selectedId, onSelect, sun, shadingResult, sampleIndex,
+  electrical, wiringEnabled }: {
   objects: SceneObject[];
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   sun: SolarSample | null;
   shadingResult: ShadingDayResult | null;
   sampleIndex: number;
+  electrical: ElectricalDesign;
+  wiringEnabled: boolean;
 }) {
   const daylight = sun !== null && sun.apparent_elevation_deg > 0;
   const sunPosition: [number, number, number] = sun
@@ -85,12 +93,20 @@ function SolarScene({ objects, selectedId, onSelect, sun, shadingResult, sampleI
         <meshStandardMaterial color="#29434c" roughness={0.97} />
       </mesh>
       <gridHelper args={[80, 80, "#466c72", "#36545f"]} position={[0, 0.009, 0]} />
-      {objects.map((object) => (
-        <SceneShape key={object.id} object={object}
-          selected={selectedId === object.id}
-          blockedFraction={activeShading(shadingResult, sun, sampleIndex, object.id)?.blocked_fraction ?? null}
-          onSelect={onSelect} />
-      ))}
+      {objects.map((object) => {
+        const string = electrical.strings.find((entry) => entry.module_ids.includes(object.id));
+        const mpptIndex = electrical.inverter.mppts.findIndex((entry) => entry.id === string?.mppt_id);
+        const mpptPalette = ["#249f94", "#768fd3", "#b18acb", "#d49b55"];
+        return (
+          <SceneShape key={object.id} object={object}
+            selected={selectedId === object.id}
+            blockedFraction={activeShading(shadingResult, sun, sampleIndex, object.id)?.blocked_fraction ?? null}
+            wireColor={wiringEnabled && object.kind === "panel"
+              ? mpptIndex >= 0 ? mpptPalette[mpptIndex % mpptPalette.length] : "#60707b"
+              : null}
+            onSelect={onSelect} />
+        );
+      })}
       <OrbitControls makeDefault enableDamping minDistance={3} maxDistance={105}
         maxPolarAngle={Math.PI / 2 - 0.02} />
     </Canvas>
@@ -127,6 +143,11 @@ export function App() {
   const [timezone, setTimezone] = useState("America/Fortaleza");
   const [date, setDate] = useState(todayFortaleza);
   const [objects, setObjects] = useState<SceneObject[]>(INITIAL_OBJECTS);
+  const [electrical, setElectrical] = useState<ElectricalDesign>(
+    () => defaultElectricalDesign(INITIAL_OBJECTS, true));
+  const [activeStringId, setActiveStringId] = useState<string | null>("S1");
+  const [wiringEnabled, setWiringEnabled] = useState(false);
+  const [rightTab, setRightTab] = useState<"solar" | "electrical">("solar");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [solarDay, setSolarDay] = useState<SolarDay | null>(null);
   const [shadingData, setShadingData] = useState<ShadingDayResult | null>(null);
@@ -183,6 +204,14 @@ export function App() {
     return () => window.clearInterval(timer);
   }, [playing, samples.length]);
 
+  function handleSceneSelect(id: string | null) {
+    setSelectedId(id);
+    if (wiringEnabled && id && activeStringId) {
+      setElectrical((previous) =>
+        assignPanelToString(previous, activeStringId, id, objects));
+    }
+  }
+
   function updateObject(changes: Partial<SceneObject>) {
     if (!selectedId) return;
     setObjects((current) => current.map((obj) =>
@@ -205,17 +234,20 @@ export function App() {
     }
     const obj = makeObject(kind, objects.length + 1);
     setObjects((current) => [...current, obj]);
+    if (kind === "panel") setElectrical((current) => registerModule(current, obj.id));
     setSelectedId(obj.id);
   }
 
   function removeSelected() {
     if (!selectedId) return;
-    setObjects((current) => current.filter((obj) => obj.id !== selectedId));
+    const removedId = selectedId;
+    setObjects((current) => current.filter((obj) => obj.id !== removedId));
+    setElectrical((current) => deleteModuleFromDesign(current, removedId));
     setSelectedId(null);
   }
 
   function exportProject() {
-    const project = { schema_version: 1, latitude, longitude, timezone, objects };
+    const project = { schema_version: 2, latitude, longitude, timezone, objects, electrical };
     const blob = new Blob([JSON.stringify(project, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
@@ -234,6 +266,9 @@ export function App() {
       setLongitude(project.longitude);
       setTimezone(project.timezone);
       setObjects(project.objects);
+      setElectrical(project.electrical);
+      setActiveStringId(project.electrical.strings[0]?.id ?? null);
+      setWiringEnabled(false);
       setSelectedId(null);
     } catch (cause: unknown) {
       window.alert(cause instanceof Error ? cause.message : "Não foi possível importar o projeto.");
@@ -247,7 +282,7 @@ export function App() {
       <header className="topbar">
         <div className="brand">
           <span className="brand-icon" aria-hidden="true">☀</span>
-          <div><strong>HSP Simulator</strong><small>Solar 3D Lab · F1 + F2 + F3</small></div>
+          <div><strong>HSP Simulator</strong><small>Solar 3D Lab · F1–F4 experimental</small></div>
         </div>
         <div className="topbar-actions">
           <span className="stage-tag">EXPERIMENTAL</span>
@@ -283,7 +318,7 @@ export function App() {
             {objects.map((obj) => (
               <button key={obj.id} type="button"
                 className={"object-item " + (selectedId === obj.id ? "selected" : "")}
-                onClick={() => setSelectedId(obj.id)}>
+                onClick={() => handleSceneSelect(obj.id)}>
                 <span className={"object-dot " + obj.kind} />
                 <span>{obj.name}</span>
                 <small>{kindTitle[obj.kind]}</small>
@@ -293,6 +328,9 @@ export function App() {
           <button type="button" className="ghost"
             onClick={() => {
               setObjects(INITIAL_OBJECTS);
+              setElectrical(defaultElectricalDesign(INITIAL_OBJECTS, true));
+              setActiveStringId("S1");
+              setWiringEnabled(false);
               setSelectedId(null);
             }}>
             Restaurar cena de exemplo
@@ -302,16 +340,30 @@ export function App() {
         <section className="canvas-pane" aria-label="Visualização tridimensional">
           <div className="canvas-badge"><span className="status-dot" /> Editor 3D em metros</div>
           <SolarScene objects={objects} selectedId={selectedId}
-            onSelect={setSelectedId} sun={activeSample}
-            shadingResult={shadingData} sampleIndex={sampleIndex} />
+            onSelect={handleSceneSelect} sun={activeSample}
+            shadingResult={shadingData} sampleIndex={sampleIndex}
+            electrical={electrical} wiringEnabled={wiringEnabled} />
           <div className="compass">
             <span>N ↑</span><span>E →</span>
           </div>
           <div className="canvas-hint">Arraste para girar · roda para aproximar · clique para selecionar</div>
-          <div className="visual-notice">F3: a cor dos módulos indica a fração geométrica bloqueada, quando calculada. Ainda sem perdas de energia.</div>
+          <div className="visual-notice">{wiringEnabled
+            ? "F4: clique nos módulos para atribuir à string ativa. Cores indicam MPPTs."
+            : "F3: a cor dos módulos indica a fração geométrica bloqueada, quando calculada. Ainda sem perdas de energia."}</div>
         </section>
 
         <aside className="side-panel right-panel">
+          <div className="workspace-tabs" role="group" aria-label="Painel de ferramentas">
+            <button type="button" className={rightTab === "solar" ? "tab-active" : ""}
+              onClick={() => { setRightTab("solar"); setWiringEnabled(false); }}>
+              Sol e sombra
+            </button>
+            <button type="button" className={rightTab === "electrical" ? "tab-active" : ""}
+              onClick={() => setRightTab("electrical")}>
+              Elétrica
+            </button>
+          </div>
+          {rightTab === "solar" ? <>
           <div className="panel-heading"><h2>Trajetória solar</h2><span>pvlib</span></div>
           <label className="field">
             <span>Dia local</span>
@@ -388,9 +440,13 @@ export function App() {
             timezone={timezone} date={date} objects={objects}
             selectedId={selectedId} sample={activeSample} sampleIndex={sampleIndex}
             result={shadingData} onResult={setShadingData} />
+          </> : <ElectricalPanel objects={objects} design={electrical}
+            onChange={setElectrical} selectedId={selectedId}
+            activeStringId={activeStringId} onActiveString={setActiveStringId}
+            wiringEnabled={wiringEnabled} onWiring={setWiringEnabled} />}
         </aside>
       </main>
-      <footer className="footer">HSP Simulator · F1: cena métrica · F2: posição solar via pvlib · F3: sombreamento geométrico do feixe direto · Sem kWh, strings ou MPPT nesta versão</footer>
+      <footer className="footer">Solar 3D Lab · F1 cena métrica · F2 sol via pvlib · F3 sombra geométrica · F4 topologia elétrica preliminar · Sem simulação kWh</footer>
     </div>
   );
 }

@@ -138,3 +138,39 @@ h2, p { margin: 0; }
 .shade-disclaimer { margin-top: 12px; font-size: 10px; color: #9fb3c0;
   line-height: 1.55; padding: 11px; background: #2a2c2c;
   border: 1px solid #625440; border-radius: 8px; }
+
+/* F4 topology editor — same experimental visual system */
+.workspace-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 22px; }
+.workspace-tabs button { background: #172e38; color: #91b7c3; border: 1px solid #31515e;
+  border-radius: 7px; padding: 10px 7px; }
+.workspace-tabs button.tab-active { background: #1a6b6a; color: #f2fbf9; border-color: #58b7aa; }
+.electrical-heading { font-size: 12px; font-weight: 800; color: #d7ebee;
+  padding: 15px 0 10px; margin: 16px 0 8px; border-top: 1px solid #365260; }
+.string-toolbar { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-bottom: 10px; }
+.string-toolbar button { flex: 1; min-width: 80px; }
+.string-items { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 6px; margin: 13px 0; }
+.string-item { display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
+  background: #17303c; border-color: #3c5667; padding: 11px; min-width: 0; }
+.string-item.active { border-color: #63c7ba; background: #1a5256; }
+.string-item strong { font-size: 12px; } .string-item small { color: #abc5cf; font-size: 10px; }
+.electrical-block { padding: 12px; background: #142d36; border: 1px solid #3b5763;
+  border-radius: 8px; margin: 10px 0; min-width: 0; overflow-wrap: anywhere; }
+.electrical-block strong { font-size: 12px; }
+.electrical-block .field:first-of-type { margin-top: 12px; }
+.wiring-tip { background: #213f40; border: 1px solid #3c827a; border-radius: 7px;
+  padding: 10px; font-size: 11px; line-height: 1.5; margin: 9px 0; color: #aee3db; }
+.verify-check { display: flex; align-items: flex-start; gap: 7px;
+  font-size: 10px; line-height: 1.5; margin-top: 7px; color: #d7c89e; }
+.verify-check input { margin-top: 2px; }
+.electrical-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0; }
+.electrical-metrics div { display: flex; flex-direction: column; gap: 6px; border: 1px solid #3c5b64;
+  border-radius: 7px; background: #143640; padding: 9px; }
+.electrical-metrics span { font-size: 10px; color: #b0c7ca; }
+.electrical-metrics b { font-size: 14px; color: #e4efef; }
+.electrical-result { padding: 12px 0; }
+.electrical-warning { display: block; color: #f2c87f; font-size: 12px; }
+.electrical-invalid { display: block; color: #ffadad; font-size: 12px; }
+.issue-error,.issue-warning { font-size: 11px; line-height: 1.5; padding: 10px;
+  border-radius: 7px; margin: 6px 0; }
+.issue-error { color: #ffc4c4; background: #4b2931; border: 1px solid #934c59; }
+.issue-warning { color: #f3daaa; background: #383321; border: 1px solid #7c6644; }
