@@ -1,7 +1,12 @@
-# Solar 3D Lab — F1/F2/F3/F4.1 (experimental)
+# Solar 3D Lab — F1/F2/F3/F3.1/F4.1/F4.2/F5 preliminar (experimental)
 
 **This project is isolated from the existing HSP Simulator API.** Branch:
 `feature/solar3d-lab`. No deployment is made to `dev` or `main`.
+
+**Documentação técnica atualizada:** [Modelos, contratos e limitações](docs/MODELOS_E_VALIDACAO.md).
+Esta branch oferece um caminho de pesquisa ponta a ponta; o cálculo de potência
+real da string/MPPT e a validação de rendimento com PVsyst ainda precisam
+de calibração por datasheet e medições.
 
 ## Delivered in F1/F2
 
@@ -173,14 +178,15 @@ publication of API 8001. There is no automatic remote deploy of this branch.
 subdivision and benchmark suite for non-rectangular obstacles; sky-view and
 horizon treatment should be added separately from direct-beam shadow casting.
 
-**F4.2 refinements:** datasheet-driven equipment catalog integration (GreenCity
-OS only after schema validation), manufacturer-specific MPPT input rules,
-substrings/bypass modelling and physical I–V/mismatch simulation. F4.1 covers
-topology and preliminary nameplate checks only.
+**F4.2 refinements:** integração do catálogo com revisão manual, experimento
+PVMismatch genérico e curva I–V estão presentes. Ainda é necessário calibrar
+o circuito de células/substrings com dados reais, ligar a sombra 3D às
+substrings físicas e integrar a solução elétrica completa por MPPT.
 
-**F5:** timestamp-wise POA irradiance and generation simulations with and
-without shading, annual and monthly energy results, uncertainty and PVsyst
-cross-validation.
+**F5 preliminar:** simulação temporal de irradiância/energia potencial,
+comparação sombra/sem sombra, agregações mensais e PDF/CSV/JSON foram criados.
+Ainda **não** há perdas elétricas rigorosas por string/MPPT, validação
+PVsyst/campo nem quantificação de incerteza. Consulte a matriz técnica.
 
 ### API contract
 
@@ -299,6 +305,30 @@ and per-MPPT aggregate currents. `electrical_only=true` and
   }
 }
 ```
+
+O editor exporta agora `schema_version: 3`, com `meshes` triangulares; projetos
+v1 e v2 são importados sem criar malhas ou ligações elétricas fictícias.
+A etapa F3.1 aceita malhas opacas triangulares com coordenadas absolutas
+de cena (X Leste/Y altura/Z Norte). Para testar, adicione uma cobertura
+triangular na aba de geometria. O ray casting utiliza os mesmos triângulos
+em Python e no renderizador 3D.
+
+### F4.2 / F5 preliminar / Relatórios
+
+Na aba **Elétrica**, o catálogo GreenCity OS pode ser carregado via
+**Selecionar exportação JSON** (ver
+`examples/greencity-staged-excerpt.json`). Campos indispensáveis faltantes
+geram bloqueios por item. O laboratório de PVMismatch exibe curvas I–V/P–V
+de módulos **STD72 genéricos**, não calibrados por fabricante.
+
+Na aba **Energia**, selecione NASA POWER (ano histórico) ou PVGIS TMY,
+modelo POA e confirme o modo experimental somente quando a procedência dos
+dados assim exigir. O resultado inclui potências/energias **potenciais**
+independentes, agregação indicativa por string/MPPT, proxy AC, comparativo
+mensal, CSV, JSON e PDF com advertências explícitas. O gráfico não
+representa energia elétrica validada de strings reais. Sem internet
+no container, a busca NASA/PVGIS pode falhar; para ensaios offline, use
+testes Python com série horária fornecida.
 
 The empty objects array above only illustrates the envelope; actual scenes
 require real geometry. Version 1 imports preserve geometry and create
