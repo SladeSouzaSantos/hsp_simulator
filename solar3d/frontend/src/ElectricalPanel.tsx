@@ -285,7 +285,7 @@ export function ElectricalPanel({ objects, design, onChange, selectedId,
               ["beta_voc_pct_c", "β Voc (%/°C)"],
               ["beta_vmp_pct_c", "β Vmp (%/°C)"], ["alpha_isc_pct_c", "α Isc (%/°C)"],
             ] as const).map(([key, label]) =>
-              <F key={key} label={label} value={catalog[key]} step={0.01}
+              <F key={key} label={label} value={catalog[key] ?? 0} step={0.01}
                 onChange={(value) => patchModel(catalog.id, { [key]: value })}/>)}
           </div>
           <label className="verify-check">
