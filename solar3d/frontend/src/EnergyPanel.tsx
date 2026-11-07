@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ElectricalDesign } from "./electrical";
 import type { SceneObject } from "./model";
 import type { MeshObstacle } from "./meshModel";
+import { MonthlyLossPanel } from "./MonthlyLossPanel";
 
 type Monthly = {
   month_utc: number; hours: number;
@@ -153,6 +154,10 @@ export function EnergyPanel({
           onChange={(e) => setAllowUnverified(e.target.checked)} />
         Autorizar cenário apenas exploratório com equipamentos não verificados
       </label>
+      <MonthlyLossPanel latitude={latitude} longitude={longitude} objects={objects}
+        meshes={meshes} design={design} source={source} year={year}
+        model={model} allowUnverified={allowUnverified}/>
+      <div className="electrical-heading">Potencial energético — modelo legado</div>
       <button type="button" className="play-button"
         disabled={busy} onClick={simulate}>
         {busy ? "Consultando meteorologia e calculando…" : "Simular série horária"}

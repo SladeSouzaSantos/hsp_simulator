@@ -230,3 +230,23 @@ h2, p { margin: 0; }
 .iv-experiment > button { width: 100%; margin: 8px 0; }
 .iv-plot { background: #132934; border: 1px solid #35586b; border-radius: 8px; padding: 9px; margin: 9px 0; }
 .iv-plot strong { font-size: 11px; }
+
+/* F5.2: monthly string and MPPT shading loss tables */
+.monthly-loss-panel { margin: 15px 0; padding: 12px; background: #132c36;
+  border: 1px solid #3f857d; border-radius: 9px; }
+.monthly-loss-panel h3 { font-size: 12px; margin: 14px 0 9px; }
+.monthly-loss-panel .verify-check { margin: 12px 0; }
+.monthly-loss-panel button { margin: 7px 0; }
+.monthly-loss-months { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
+.monthly-loss-month { display: grid; grid-template-columns: 24px 1fr 75px;
+  align-items: center; gap: 6px; font-size: 10px; }
+.monthly-loss-month strong { color: #f5c989; text-align: right; }
+.monthly-loss-bar { height: 11px; background: #a56847; border-radius: 4px; overflow: hidden; }
+.monthly-loss-bar > div { height: 100%; background: #3fb695; }
+.monthly-circuit { background: #19353d; border: 1px solid #3b6265;
+  border-radius: 7px; margin: 7px 0; font-size: 11px; }
+.monthly-circuit summary { padding: 10px; cursor: pointer; }
+.monthly-circuit table { width: 100%; font-size: 10px; border-collapse: collapse; }
+.monthly-circuit th,.monthly-circuit td { padding: 5px 3px; text-align: right; }
+.monthly-circuit th:first-child,.monthly-circuit td:first-child { text-align: left; }
+.monthly-circuit small { font-size: 9px; color: #acc1c8; }
