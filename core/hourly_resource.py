@@ -62,8 +62,8 @@ def resource_hourly(req: HourlyResourceRequest, repository) -> dict:
     # NASA POWER labels 1h intervals by their START. Mid-hour sun position
     # is consistent with the pre-existing /calcular POA engine.
     times = df.index + pd.Timedelta(minutes=30)
-    solar = pvlib.solarposition.get_solarposition(
-        times, latitude=req.latitude, longitude=req.longitude)
+    solar = pvlib.location.Location(
+        req.latitude, req.longitude, tz="UTC").get_solarposition(times)
     zenith = np.asarray(solar["apparent_zenith"], dtype=float)
     azimuth = np.asarray(solar["azimuth"], dtype=float)
     elevation = np.asarray(solar["apparent_elevation"], dtype=float)
