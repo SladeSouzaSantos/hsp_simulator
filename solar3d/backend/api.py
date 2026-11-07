@@ -26,6 +26,7 @@ from solar3d.backend.iv_experiment import IvExperimentRequest, iv_experiment
 from solar3d.backend.energy import EnergyRequest, simulate_energy
 from solar3d.backend.reports import ReportRequest, render_pdf
 from solar3d.backend.monthly_losses import MonthlyLossRequest, monthly_losses
+from solar3d.backend.monthly_report import MonthlyLossReport, render_monthly_loss_report
 
 app = FastAPI(
     title="Solar 3D Lab — solar geometry and direct-beam shading",
@@ -252,3 +253,14 @@ def estimated_monthly_string_mppt_losses(request: MonthlyLossRequest) -> dict:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except (RuntimeError, OSError, requests.RequestException) as exc:
         raise HTTPException(status_code=503, detail="Fonte meteorológica indisponível") from exc
+
+
+@app.post("/solar3d/losses/report/pdf")
+def export_monthly_string_mppt_pdf(request: MonthlyLossReport):
+    """Formatted unverified report; never implies independently audited model."""
+    from fastapi import Response
+    return Response(
+        content=render_monthly_loss_report(request),
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'attachment; filename="solar3d-perdas-mppt.pdf"'},
+    )
