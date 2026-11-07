@@ -13,7 +13,7 @@ const degrees = (value: number) => value * Math.PI / 180;
 const todayFortaleza = () => new Date().toLocaleDateString("sv-SE", { timeZone: "America/Fortaleza" });
 const showDegrees = (value: number) => value.toFixed(1) + "°";
 
-function SceneShape({ object, selected, onSelect }: {
+function SceneShape({ object, selected, onSelect, blockedFraction }: {
   object: SceneObject;
   selected: boolean;
   onSelect: (id: string) => void;
@@ -47,7 +47,7 @@ function SceneShape({ object, selected, onSelect }: {
   );
 }
 
-function SolarScene({ objects, selectedId, onSelect, sun }: {
+function SolarScene({ objects, selectedId, onSelect, sun, shadingResult, sampleIndex }: {
   objects: SceneObject[];
   selectedId: string | null;
   onSelect: (id: string | null) => void;
