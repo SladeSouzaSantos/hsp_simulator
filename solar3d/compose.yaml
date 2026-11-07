@@ -1,0 +1,18 @@
+name: hsp-solar3d-lab
+services:
+  solar3d-api:
+    build:
+      context: ..
+      dockerfile: solar3d/backend/Dockerfile
+    restart: unless-stopped
+    expose:
+      - "8001"
+  solar3d-web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5174:80"
+    depends_on:
+      - solar3d-api
