@@ -20,6 +20,7 @@ from solar3d.backend.shading import (
 from solar3d.backend.electrical import (
     ElectricalValidationRequest, check_electrical_design,
 )
+from solar3d.backend.catalog import GreencityExport, preview_import
 
 app = FastAPI(
     title="Solar 3D Lab — solar geometry and direct-beam shading",
@@ -194,3 +195,9 @@ def shading_day(request: ShadingDayRequest) -> dict:
 def electrical_validate(request: ElectricalValidationRequest) -> dict:
     """Review topology and datasheet-nameplate limits (NO power simulation)."""
     return check_electrical_design(request)
+
+
+@app.post("/solar3d/catalog/import/greencity")
+def greencity_catalog_preview(request: GreencityExport) -> dict:
+    """Staged import only. Incomplete catalog records are blocked, never guessed."""
+    return preview_import(request)
