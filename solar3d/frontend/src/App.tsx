@@ -12,6 +12,7 @@ import { ShadingPanel } from "./ShadingPanel";
 import type { ShadingDayResult } from "./shadingModel";
 import { activeShading } from "./shadingModel";
 import { ElectricalPanel } from "./ElectricalPanel";
+import { EnergyPanel } from "./EnergyPanel";
 import { assignPanelToString, defaultElectricalDesign,
   deleteModuleFromDesign, registerModule } from "./electrical";
 import type { ElectricalDesign } from "./electrical";
@@ -171,7 +172,7 @@ export function App() {
     () => defaultElectricalDesign(INITIAL_OBJECTS, true));
   const [activeStringId, setActiveStringId] = useState<string | null>("S1");
   const [wiringEnabled, setWiringEnabled] = useState(false);
-  const [rightTab, setRightTab] = useState<"solar" | "electrical">("solar");
+  const [rightTab, setRightTab] = useState<"solar" | "electrical" | "energy">("solar");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [solarDay, setSolarDay] = useState<SolarDay | null>(null);
   const [shadingData, setShadingData] = useState<ShadingDayResult | null>(null);
@@ -403,6 +404,10 @@ export function App() {
               onClick={() => setRightTab("electrical")}>
               Elétrica
             </button>
+            <button type="button" className={rightTab === "energy" ? "tab-active" : ""}
+              onClick={() => { setRightTab("energy"); setWiringEnabled(false); }}>
+              Energia
+            </button>
           </div>
           {rightTab === "solar" ? <>
           <div className="panel-heading"><h2>Trajetória solar</h2><span>pvlib</span></div>
@@ -481,13 +486,15 @@ export function App() {
             timezone={timezone} date={date} objects={objects} meshes={meshes}
             selectedId={selectedId} sample={activeSample} sampleIndex={sampleIndex}
             result={shadingData} onResult={setShadingData} />
-          </> : <ElectricalPanel objects={objects} design={electrical}
+          </> : rightTab === "electrical" ? <ElectricalPanel objects={objects} design={electrical}
             onChange={setElectrical} selectedId={selectedId}
             activeStringId={activeStringId} onActiveString={setActiveStringId}
-            wiringEnabled={wiringEnabled} onWiring={setWiringEnabled} />}
+            wiringEnabled={wiringEnabled} onWiring={setWiringEnabled} />
+          : <EnergyPanel latitude={latitude} longitude={longitude}
+              objects={objects} meshes={meshes} design={electrical} />}
         </aside>
       </main>
-      <footer className="footer">Solar 3D Lab · F1 cena métrica · F2 sol via pvlib · F3 sombra geométrica · F4 topologia elétrica preliminar · Sem simulação kWh</footer>
+      <footer className="footer">Solar 3D Lab · F1 cena métrica · F2 sol via pvlib · F3 sombra geométrica · F4 topologia elétrica · F5: proxy horário exploratório de produção (não validado)</footer>
     </div>
   );
 }

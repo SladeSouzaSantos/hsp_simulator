@@ -189,3 +189,39 @@ h2, p { margin: 0; }
 .mesh-row:last-child { border-bottom: 0; }
 .mesh-row span { flex: 1; font-size: 10px; color: #b2c8d0; }
 .mesh-row button { padding: 6px 8px; font-size: 10px; }
+
+/* F5 exploratory temporal resource/energy reports */
+.workspace-tabs { grid-template-columns: repeat(3, minmax(0,1fr)); }
+.energy-panel h3 { font-size: 12px; color: #d6eef0; margin: 14px 0 10px; }
+.energy-report { padding-top: 14px; }
+.energy-report-header { display: flex; flex-direction: column; gap: 6px;
+  border-bottom: 1px solid #3a5c68; padding: 12px 0; }
+.energy-report-header strong { font-size: 15px; }
+.energy-report-header span { color: #dfbf82; font-size: 11px; }
+.energy-bars { margin: 12px 0; display: flex; flex-direction: column; gap: 5px; }
+.energy-month { display: flex; align-items: center; gap: 6px; }
+.energy-month > span { width: 29px; color: #9cb5c0; font-size: 10px; }
+.energy-month > small { width: 60px; text-align: right; font-size: 10px; color: #c3d4dc; }
+.energy-bar-track { height: 21px; flex: 1; min-width: 0; position: relative; background: #25414e; border-radius: 4px; overflow: hidden; }
+.energy-bar-ref { height: 100%; background: #4081b0; position: absolute; left: 0; top: 0; }
+.energy-bar-shaded { height: 50%; background: #54d3ae; position: absolute; left: 0; bottom: 0; }
+.energy-tabular { display: flex; flex-direction: column; gap: 5px; }
+.energy-tabular > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 5px;
+  border: 1px solid #325562; background: #16313e; border-radius: 6px; padding: 9px; font-size: 11px; }
+.energy-tabular > div span { color: #afc8d2; }
+.energy-export { display: grid; gap: 7px; margin: 15px 0; }
+.energy-report-note { font-size: 10px; color: #a1b6bd; line-height: 1.5; margin: 16px 0; }
+@media print {
+  @page { size: A4 portrait; margin: 14mm; }
+  body { color: #111; background: #fff; }
+  .topbar, .footer, .left-panel, .canvas-pane, .right-panel > :not(.energy-panel),
+  .right-panel .workspace-tabs, .energy-panel > :not(.energy-report), .no-print {
+    display: none !important;
+  }
+  .workspace, .right-panel { display: block !important; width: 100%; min-height: auto;
+    overflow: visible; padding: 0; border: 0; background: #fff; color: #111; }
+  .energy-panel .energy-report { display: block; background: #fff; color: #111; }
+  .energy-report * { color: #111 !important; }
+  .energy-report .electrical-metrics > div,
+  .energy-tabular > div, .energy-bar-track { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+}
