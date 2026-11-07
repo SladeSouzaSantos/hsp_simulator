@@ -216,8 +216,29 @@ export function EnergyPanel({
             download(JSON.stringify(result, null, 2), "solar3d-relatorio.json", "application/json")}>
             Exportar JSON
           </button>
+          <button type="button" className="secondary" onClick={async () => {
+            if (!result) return;
+            try {
+              const response = await fetch("/solar3d/reports/pdf", {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(result),
+              });
+              if (!response.ok) throw new Error("Serviço de PDF indisponível (HTTP " + response.status + ")");
+              const blob = await response.blob();
+              const url = URL.createObjectURL(blob);
+              const anchor = document.createElement("a");
+              anchor.href = url;
+              anchor.download = "solar3d-relatorio-experimental.pdf";
+              anchor.click();
+              window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+            } catch (cause: unknown) {
+              setError(cause instanceof Error ? cause.message : "Erro ao gerar PDF.");
+            }
+          }}>
+            Baixar relatório PDF
+          </button>
           <button type="button" className="secondary" onClick={() => window.print()}>
-            Imprimir / salvar PDF
+            Visualizar impressão
           </button>
         </div>
         <div className="energy-report-note">
