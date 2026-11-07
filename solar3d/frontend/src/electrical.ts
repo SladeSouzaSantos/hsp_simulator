@@ -8,7 +8,7 @@ export type ModuleSpec = {
   pmax_w: number; voc_v: number; vmp_v: number;
   isc_a: number; imp_a: number;
   beta_voc_pct_c: number; beta_vmp_pct_c: number;
-  alpha_isc_pct_c: number; verified_datasheet: boolean;
+  alpha_isc_pct_c: number; gamma_pmax_pct_c?: number | null; verified_datasheet: boolean;
 };
 
 export type MpptSpec = {
@@ -68,6 +68,7 @@ const demoModule: ModuleSpec = {
   model: "Módulo 550 W — valores ilustrativos",
   pmax_w: 550, voc_v: 49, vmp_v: 41, isc_a: 14.2, imp_a: 13.42,
   beta_voc_pct_c: -0.28, beta_vmp_pct_c: -0.35, alpha_isc_pct_c: 0.04,
+  gamma_pmax_pct_c: -0.30,
   verified_datasheet: false,
 };
 
@@ -164,6 +165,8 @@ function isModule(v: unknown): v is ModuleSpec {
   return isRecord(v) && hasString(v.id) && hasString(v.manufacturer) &&
     hasString(v.model) && ["pmax_w", "voc_v", "vmp_v", "isc_a", "imp_a"].every((k) => isPositive(v[k])) &&
     ["beta_voc_pct_c", "beta_vmp_pct_c", "alpha_isc_pct_c"].every((k) => isFiniteNumber(v[k])) &&
+    (v.gamma_pmax_pct_c === undefined || v.gamma_pmax_pct_c === null ||
+      isFiniteNumber(v.gamma_pmax_pct_c)) &&
     typeof v.verified_datasheet === "boolean";
 }
 

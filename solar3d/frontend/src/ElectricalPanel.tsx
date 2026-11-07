@@ -281,7 +281,8 @@ export function ElectricalPanel({ objects, design, onChange, selectedId,
             {([
               ["pmax_w", "Pmax (W)"], ["voc_v", "Voc (V)"],
               ["vmp_v", "Vmp (V)"], ["isc_a", "Isc (A)"],
-              ["imp_a", "Imp (A)"], ["beta_voc_pct_c", "β Voc (%/°C)"],
+              ["imp_a", "Imp (A)"], ["gamma_pmax_pct_c", "γ Pmax (%/°C)"],
+              ["beta_voc_pct_c", "β Voc (%/°C)"],
               ["beta_vmp_pct_c", "β Vmp (%/°C)"], ["alpha_isc_pct_c", "α Isc (%/°C)"],
             ] as const).map(([key, label]) =>
               <F key={key} label={label} value={catalog[key]} step={0.01}
