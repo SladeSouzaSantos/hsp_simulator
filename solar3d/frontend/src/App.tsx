@@ -5,6 +5,9 @@ import type { ChangeEvent } from "react";
 import { INITIAL_OBJECTS, makeObject, parseProject } from "./model";
 import type { Position, SceneKind, SceneObject, SolarDay, SolarSample } from "./model";
 import { sunVector } from "./solarMath";
+import { ShadingPanel } from "./ShadingPanel";
+import type { ShadingDayResult } from "./shadingModel";
+import { activeShading } from "./shadingModel";
 
 const degrees = (value: number) => value * Math.PI / 180;
 const todayFortaleza = () => new Date().toLocaleDateString("sv-SE", { timeZone: "America/Fortaleza" });
@@ -14,9 +17,14 @@ function SceneShape({ object, selected, onSelect }: {
   object: SceneObject;
   selected: boolean;
   onSelect: (id: string) => void;
+  blockedFraction: number | null;
 }) {
   const isPanel = object.kind === "panel";
-  const color = isPanel ? (selected ? "#22cfc7" : "#215f95") :
+  const color = isPanel ? (selected ? "#22cfc7" :
+    blockedFraction === null ? "#215f95" :
+    blockedFraction >= 0.75 ? "#d65c4e" :
+    blockedFraction >= 0.35 ? "#d3a352" :
+    blockedFraction > 0 ? "#5c9b8a" : "#215f95") :
     object.kind === "building" ? (selected ? "#8daec5" : "#6b7f8d") :
     (selected ? "#ffc173" : "#bc966e");
   return (
@@ -44,6 +52,8 @@ function SolarScene({ objects, selectedId, onSelect, sun }: {
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   sun: SolarSample | null;
+  shadingResult: ShadingDayResult | null;
+  sampleIndex: number;
 }) {
   const daylight = sun !== null && sun.apparent_elevation_deg > 0;
   const sunPosition: [number, number, number] = sun
@@ -78,6 +88,7 @@ function SolarScene({ objects, selectedId, onSelect, sun }: {
       {objects.map((object) => (
         <SceneShape key={object.id} object={object}
           selected={selectedId === object.id}
+          blockedFraction={activeShading(shadingResult, sun, sampleIndex, object.id)?.blocked_fraction ?? null}
           onSelect={onSelect} />
       ))}
       <OrbitControls makeDefault enableDamping minDistance={3} maxDistance={105}
@@ -118,6 +129,7 @@ export function App() {
   const [objects, setObjects] = useState<SceneObject[]>(INITIAL_OBJECTS);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [solarDay, setSolarDay] = useState<SolarDay | null>(null);
+  const [shadingData, setShadingData] = useState<ShadingDayResult | null>(null);
   const [sampleIndex, setSampleIndex] = useState(36);
   const [playing, setPlaying] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -235,7 +247,7 @@ export function App() {
       <header className="topbar">
         <div className="brand">
           <span className="brand-icon" aria-hidden="true">☀</span>
-          <div><strong>HSP Simulator</strong><small>Solar 3D Lab · F1 + F2</small></div>
+          <div><strong>HSP Simulator</strong><small>Solar 3D Lab · F1 + F2 + F3</small></div>
         </div>
         <div className="topbar-actions">
           <span className="stage-tag">EXPERIMENTAL</span>
@@ -290,12 +302,13 @@ export function App() {
         <section className="canvas-pane" aria-label="Visualização tridimensional">
           <div className="canvas-badge"><span className="status-dot" /> Editor 3D em metros</div>
           <SolarScene objects={objects} selectedId={selectedId}
-            onSelect={setSelectedId} sun={activeSample} />
+            onSelect={setSelectedId} sun={activeSample}
+            shadingResult={shadingData} sampleIndex={sampleIndex} />
           <div className="compass">
             <span>N ↑</span><span>E →</span>
           </div>
           <div className="canvas-hint">Arraste para girar · roda para aproximar · clique para selecionar</div>
-          <div className="visual-notice">Sombras exclusivamente visuais — sem cálculo de perda anual nesta fase.</div>
+          <div className="visual-notice">F3: a cor dos módulos indica a fração geométrica bloqueada, quando calculada. Ainda sem perdas de energia.</div>
         </section>
 
         <aside className="side-panel right-panel">
@@ -371,9 +384,13 @@ export function App() {
           <div className="scene-stats">
             <span>Módulos na cena</span><strong>{panels}</strong>
           </div>
+          <ShadingPanel latitude={latitude} longitude={longitude}
+            timezone={timezone} date={date} objects={objects}
+            selectedId={selectedId} sample={activeSample} sampleIndex={sampleIndex}
+            result={shadingData} onResult={setShadingData} />
         </aside>
       </main>
-      <footer className="footer">HSP Simulator · Laboratório 3D isolado · F1: modelagem métrica · F2: sol calculado pelo pvlib · Sem estimativa elétrica nesta versão</footer>
+      <footer className="footer">HSP Simulator · F1: cena métrica · F2: posição solar via pvlib · F3: sombreamento geométrico do feixe direto · Sem kWh, strings ou MPPT nesta versão</footer>
     </div>
   );
 }

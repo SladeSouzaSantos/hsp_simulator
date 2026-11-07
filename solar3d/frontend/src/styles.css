@@ -106,3 +106,35 @@ h2, p { margin: 0; }
   .topbar-actions { width: 100%; }
   .topbar-actions button { flex: 1; }
 }
+
+/* F3: daily geometric direct-beam shadow analysis */
+.shading-panel { margin-top: 6px; }
+.field select { min-width: 0; width: 100%; padding: 9px; background: #0d1b24;
+  color: #f1f7fa; border: 1px solid #395666; border-radius: 7px; outline: none;
+  font-size: 12px; }
+.field select:focus { border-color: #6bc6c0; }
+.shade-summary-list { display: flex; flex-direction: column; gap: 8px; margin: 14px 0; }
+.shade-result { border: 1px solid #315261; border-radius: 8px; padding: 10px;
+  background: #162e38; }
+.shade-result.active { border-color: #54bcb1; }
+.shade-result-top { display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  font-size: 12px; }
+.shade-result-top strong { overflow-wrap: anywhere; }
+.shade-result-top span { white-space: nowrap; color: #f0c17a; font-weight: 700; }
+.shade-result small { display: block; font-size: 10px; color: #a3bbc6; margin-top: 6px; }
+.shade-bar { height: 6px; width: 100%; margin-top: 9px; overflow: hidden;
+  background: #24424d; border-radius: 9px; }
+.shade-bar > div { height: 100%; background: #d89958; border-radius: 9px; }
+.shade-grid-wrapper { background: #152e37; padding: 12px; border: 1px solid #355663;
+  border-radius: 9px; margin: 15px 0; }
+.shade-grid-wrapper > strong { display: block; font-size: 11px; margin-bottom: 12px; }
+.shade-grid { display: grid; gap: 3px; max-width: 220px; margin: 0 auto; }
+.shade-cell { aspect-ratio: 1.2; border: 1px solid #6991a0; border-radius: 2px; }
+.shade-cell.clear { background: #237cac; } .shade-cell.blocked { background: #ce6954; }
+.shade-legend { display: flex; justify-content: space-evenly; gap: 7px;
+  margin-top: 10px; color: #9db9c4; font-size: 10px; }
+.shade-legend span:first-child { color: #56b5df; }
+.shade-legend span:last-child { color: #ed9d85; }
+.shade-disclaimer { margin-top: 12px; font-size: 10px; color: #9fb3c0;
+  line-height: 1.55; padding: 11px; background: #2a2c2c;
+  border: 1px solid #625440; border-radius: 8px; }

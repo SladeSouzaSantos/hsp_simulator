@@ -49,8 +49,7 @@ def test_invalid_scene_returns_422_instead_of_truncation():
         objects=[sample_panel(), sample_panel()]
     )).status_code == 422
     invalid = sample_panel()
-    invalid["position"]["elevation"] = float("nan")
-    # JSON NaN is not standards compliant, so use invalid dimension instead.
+    # NaN is not JSON-compliant. Use a serializable invalid dimension.
     invalid["width"] = -3
     assert client.post("/solar3d/shading-day", json=request(objects=[invalid])).status_code == 422
 
