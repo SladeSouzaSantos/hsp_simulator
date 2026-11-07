@@ -1,4 +1,4 @@
-# Solar 3D Lab — F1/F2/F3 (experimental)
+# Solar 3D Lab — F1/F2/F3/F4.1 (experimental)
 
 **This project is isolated from the existing HSP Simulator API.** Branch:
 `feature/solar3d-lab`. No deployment is made to `dev` or `main`.
@@ -8,7 +8,9 @@
 - Editable Three.js scene in metric units: **X = East, Y = Up, Z = North**.
 - Add/select/edit/remove primitive buildings, obstacles and PV modules.
 - Position (object **center**) in metres, geometry in metres, panel tilt and geographic azimuth.
-- Save/load versioned JSON scene (`schema_version: 1`), with basic validation.
+- Save/load versioned JSON scene. The **project schema is now v2** (adds an
+  electrical design); import of old `schema_version: 1` files remains supported.
+  The converter **does not invent wiring** for legacy projects.
 - Solar-day endpoint backed by **pvlib**, using geographic coordinates, civil date
   and **IANA timezone** (including historical DST transitions).
 - 15-minute timeline with play/pause, daylight/night status and **visual** real-time shadows.
@@ -34,12 +36,64 @@
 - The backend bounds synchronous complexity with a request-size budget; large
   plants will need workers and batching.
 
-**Not implemented:** terrain/trees/true arbitrary triangle meshes, horizon,
-diffuse/reflected irradiance loss, irradiance weighting, diode bypass, module
-I–V curves, strings, MPPT, inverter efficiency, kWh/year and PVsyst-equivalent
-validation. The Three.js visual shadow map is only a visualization; the F3
-fractions are calculated independently on the Python backend. Neither should be
-used as a commercial energy loss figure yet.
+**Not implemented in F3:** terrain/trees/true arbitrary triangle meshes,
+horizon, diffuse/reflected irradiance loss, irradiance weighting, bypass,
+module I–V curves, inverter efficiency, kWh/year and PVsyst-equivalent
+validation. The Three.js visual shadow map is only a visualization; F3
+fractions are calculated independently on the Python backend.
+
+## Delivered in F4.1 — electrical topology and preliminary limits
+
+The **Elétrica** tab allows you to assign an equipment model to each panel,
+create multiple strings, connect/disconnect modules by clicking on the scene,
+attach every string to an inverter MPPT, manage parallel strings, and edit
+the inverter + MPPT nameplate parameters. During wiring mode, module colors
+indicate their MPPT; outside wiring mode, colors indicate F3 geometric shading.
+
+- Each module can belong to **at most one string** in UI operations; moving
+  it into another string atomically disconnects it from its previous string.
+- A string contains **ordered** module IDs (series wiring). Strings are
+  assigned to MPPT IDs. Multiple strings may share an MPPT in parallel.
+- A *catalog item* contains a manufacturer/model identifier, Pmax, Voc, Vmp,
+  Isc, Imp and temperature coefficients. An inverter has maximum DC voltage,
+  nominal AC power and per-MPPT voltage/current/parallel-string limits.
+- **All factory sample equipment is fictitious and unverified.** Replace it
+  with real datasheet values. Explicitly mark `verified_datasheet` only after
+  checking the manufacturer's official document. The example is **not**
+  a recommendation or a real-world compatible design.
+- Press **Validar arranjo elétrico** to call the independent FastAPI endpoint
+  `POST /solar3d/electrical/validate`. Server-side validation catches
+  duplicate assignments, orphan IDs, unassigned/unknown module specs,
+  mismatched models in series, incompatible MPPT assignment, and obvious
+  nameplate limits. It returns typed warnings/errors and a status.
+- Cold-cell Voc must stay below the absolute inverter maximum DC voltage;
+  hot-cell Vmp must stay above the MPPT minimum, and cold-cell Vmp below its
+  maximum. Parallel strings' **currents** add at each MPPT; their voltages do
+  **not** add. Parallel strings with incompatible Vmp receive warnings/errors.
+- Estimated `Imp` at high temperature uses the Isc coefficient as a
+  conservative approximation. This is **not** an independently characterized
+  cell current or validated thermal model.
+- A preliminary connected nameplate DC power and DC/AC ratio are returned,
+  **not** an energy yield. If DC > inverter nominal AC, the system warns about
+  checking the manufacturer's permitted oversizing/clipping; this warning
+  does not determine a valid ratio.
+
+**Temperature fields are assumed PV CELL temperatures**, not air temperatures.
+Linear calculations are first-order estimators:
+
+```text
+Voc_cold_string = N × Voc_STC × [1 + (betaVoc_%/°C / 100) × (Tcell_min - 25)]
+Vmp_hot_string  = N × Vmp_STC × [1 + (betaVmp_%/°C / 100) × (Tcell_max - 25)]
+Vmp_cold_string = N × Vmp_STC × [1 + (betaVmp_%/°C / 100) × (Tcell_min - 25)]
+Isc_hot_string  = Isc_STC × [1 + (alphaIsc_%/°C / 100) × (Tcell_max - 25)]
+```
+
+No output from this endpoint constitutes a design approval: it **does not**
+validate conductor gauge, cable voltage drop, fuses, connector ratings,
+protective coordination, grounding, standards compliance, reverse currents,
+module temperature estimates, spectral/irradiance effects, bypass diodes,
+I–V curves, electrical mismatch, MPPT control efficiency, actual DC/AC
+production or annual energy losses. These require later engineering phases.
 
 ## Run locally
 
@@ -105,7 +159,9 @@ publication of API 8001. There is no automatic remote deploy of this branch.
 - A building intersecting a panel is an invalid physical installation; the
   editor does not yet prevent collisions.
 - Data are stored only in the browser session until JSON export. No database
-  or remote persistence.
+  or remote persistence. F4 assignments are saved in project schema version 2.
+- The new electrical endpoint is **stateless** and does not persist customer
+  datasheets, topology or PV site geometry.
 - Geospatial orientation uses geographic/true North and the backend solar
   azimuth. Magnetic declination is not involved.
 - The 3D renderer's y-up coordinates differ from a separate ENU scientific
@@ -117,8 +173,10 @@ publication of API 8001. There is no automatic remote deploy of this branch.
 subdivision and benchmark suite for non-rectangular obstacles; sky-view and
 horizon treatment should be added separately from direct-beam shadow casting.
 
-**F4:** electrical graph (modules -> strings -> MPPT -> inverter), catalog
-validation, I-V/substrings/bypass modelling.
+**F4.2 refinements:** datasheet-driven equipment catalog integration (GreenCity
+OS only after schema validation), manufacturer-specific MPPT input rules,
+substrings/bypass modelling and physical I–V/mismatch simulation. F4.1 covers
+topology and preliminary nameplate checks only.
 
 **F5:** timestamp-wise POA irradiance and generation simulations with and
 without shading, annual and monthly energy results, uncertainty and PVsyst
@@ -177,19 +235,82 @@ Response structure:
 - `mean_blocked_fraction_direct_eligible`: unweighted geometric mean.
 - `geometry_only: true` and `limitations`: explicit fidelity disclosure.
 
-The parser rejects invalid dimensions, duplicate IDs, scenes without modules
+The F3 parser rejects invalid dimensions, duplicate IDs, scenes without modules
 and requests that exceed the synchronous computation budget with HTTP 422.
 Objects in the scene **are not** a cadastral/GPS georegistered model:
 `position` is a local metric offset (X=East, Y=Up, Z=North) from an arbitrary
 local origin, and `elevation` is the object's center height in metres.
 
+### F4 electrical validation API
+
+`POST /solar3d/electrical/validate` accepts:
+
+```json
+{
+  "panel_ids": ["M01", "M02", "M03"],
+  "design": {
+    "module_catalog": [{
+      "id": "DEMO-550", "manufacturer": "EXEMPLO (não real)",
+      "model": "Módulo ilustrativo 550 W", "pmax_w": 550,
+      "voc_v": 49, "vmp_v": 41, "isc_a": 14.2, "imp_a": 13.42,
+      "beta_voc_pct_c": -0.28, "beta_vmp_pct_c": -0.35,
+      "alpha_isc_pct_c": 0.04, "verified_datasheet": false
+    }],
+    "module_model_ids": {
+      "M01": "DEMO-550", "M02": "DEMO-550", "M03": "DEMO-550"
+    },
+    "inverter": {
+      "id": "DEMO-INV", "manufacturer": "EXEMPLO (não real)",
+      "model": "Inversor ilustrativo 5 kW",
+      "max_dc_voltage_v": 600, "rated_ac_power_w": 5000,
+      "verified_datasheet": false,
+      "mppts": [{
+        "id": "MPPT1", "min_voltage_v": 100, "max_voltage_v": 550,
+        "max_input_current_a": 20,
+        "max_short_circuit_current_a": 25,
+        "max_parallel_strings": 2
+      }]
+    },
+    "strings": [{
+      "id": "S1", "mppt_id": "MPPT1",
+      "module_ids": ["M01", "M02", "M03"]
+    }],
+    "min_cell_temp_c": 0, "max_cell_temp_c": 65
+  }
+}
+```
+
+The response includes `status` (`invalid`, `review_required`,
+`preliminary_pass`), `issues`, `summary`, per-string cold/hot voltages,
+and per-MPPT aggregate currents. `electrical_only=true` and
+`ready_for_energy_simulation=false` always clarify the current scope.
+
+### Project JSON schema v2
+
+```json
+{
+  "schema_version": 2,
+  "latitude": -5.9252,
+  "longitude": -35.205,
+  "timezone": "America/Fortaleza",
+  "objects": [],
+  "electrical": {
+    "...": "same design structure as above"
+  }
+}
+```
+
+The empty objects array above only illustrates the envelope; actual scenes
+require real geometry. Version 1 imports preserve geometry and create
+**unconnected** default wiring with clearly labeled illustrative equipment.
+
 ## Architecture
 
 ```text
 solar3d/
-├── backend/              FastAPI / pvlib + direct-beam ray/box shadowing
+├── backend/              FastAPI / pvlib + shading + F4 electrical checks
 ├── frontend/             React / Vite / R3F / Three.js
-│   └── src/              scene editor, shading UI, schema & tests
+│   └── src/              scene editor, shading UI, wiring/catalog UI & tests
 ├── compose.yaml          independent containers + local-only web binding
 └── README.md             current lab contract
 
