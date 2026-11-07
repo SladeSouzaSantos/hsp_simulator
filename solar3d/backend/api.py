@@ -23,6 +23,7 @@ from solar3d.backend.electrical import (
 )
 from solar3d.backend.catalog import GreencityExport, preview_import
 from solar3d.backend.iv_experiment import IvExperimentRequest, iv_experiment
+from solar3d.backend.energy import EnergyRequest, simulate_energy
 
 app = FastAPI(
     title="Solar 3D Lab — solar geometry and direct-beam shading",
@@ -213,3 +214,15 @@ def greencity_catalog_preview(request: GreencityExport) -> dict:
 def electrical_iv_experiment(request: IvExperimentRequest) -> dict:
     """Generic cell-level reference experiment (not calibrated)."""
     return iv_experiment(request)
+
+
+@app.post("/solar3d/energy/simulate")
+def energy_simulate(request: EnergyRequest) -> dict:
+    """Hourly PVWatts module-potential scenario; never claim final AC yield."""
+    from fastapi import HTTPException
+    try:
+        return simulate_energy(request)
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except (ConnectionError, TimeoutError) as exc:
+        raise HTTPException(status_code=502, detail="Fonte meteorológica indisponível") from exc

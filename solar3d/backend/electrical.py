@@ -25,6 +25,7 @@ class ModuleSpec(BaseModel):
     beta_voc_pct_c: float = Field(ge=-1, le=0, allow_inf_nan=False)
     beta_vmp_pct_c: float = Field(ge=-1, le=0, allow_inf_nan=False)
     alpha_isc_pct_c: float = Field(ge=0, le=1, allow_inf_nan=False)
+    gamma_pmax_pct_c: float | None = Field(default=None, ge=-1, le=0, allow_inf_nan=False)
     verified_datasheet: bool = False
 
     @model_validator(mode="after")

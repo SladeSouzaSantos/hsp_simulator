@@ -67,6 +67,7 @@ def _module(raw: dict[str, Any]) -> dict:
         "beta_voc_pct_c": "tempCoefVoc",
         "beta_vmp_pct_c": "tempCoefVmp",
         "alpha_isc_pct_c": "tempCoefIsc",
+        "gamma_pmax_pct_c": "tempCoefPmax",
     }
     kwargs: dict[str, Any] = {}
     for target, source in conversion.items():
