@@ -17,6 +17,10 @@ from solar3d.backend.shading import (
     SceneObject, direction_towards_sun, fraction_blocked,
 )
 
+from solar3d.backend.electrical import (
+    ElectricalValidationRequest, check_electrical_design,
+)
+
 app = FastAPI(
     title="Solar 3D Lab — solar geometry and direct-beam shading",
     version="0.2.0",
@@ -184,3 +188,9 @@ def shading_day(request: ShadingDayRequest) -> dict:
             "no electrical loss, MPPT, strings, inverter AC or kWh simulation",
         ],
     }
+
+
+@app.post("/solar3d/electrical/validate")
+def electrical_validate(request: ElectricalValidationRequest) -> dict:
+    """Review topology and datasheet-nameplate limits (NO power simulation)."""
+    return check_electrical_design(request)
