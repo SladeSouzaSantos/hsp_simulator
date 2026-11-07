@@ -7,3 +7,5 @@ pvlib>=0.11,<0.16
 
 # Optional scientific library enabled for isolated F4.2 benchmark
 pvmismatch==4.1
+
+reportlab>=4,<5

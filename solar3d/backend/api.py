@@ -24,6 +24,7 @@ from solar3d.backend.electrical import (
 from solar3d.backend.catalog import GreencityExport, preview_import
 from solar3d.backend.iv_experiment import IvExperimentRequest, iv_experiment
 from solar3d.backend.energy import EnergyRequest, simulate_energy
+from solar3d.backend.reports import ReportRequest, render_pdf
 
 app = FastAPI(
     title="Solar 3D Lab — solar geometry and direct-beam shading",
@@ -226,3 +227,14 @@ def energy_simulate(request: EnergyRequest) -> dict:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except (ConnectionError, TimeoutError) as exc:
         raise HTTPException(status_code=502, detail="Fonte meteorológica indisponível") from exc
+
+
+@app.post("/solar3d/reports/pdf")
+def energy_pdf_report(request: ReportRequest):
+    """Render prominently unverified browser-submitted research report."""
+    from fastapi import Response
+    return Response(
+        content=render_pdf(request),
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'attachment; filename="solar3d-relatorio.pdf"'},
+    )
