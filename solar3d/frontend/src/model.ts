@@ -1,6 +1,8 @@
 /** Metres in a local tangent plane: east=X, north=Z, elevation=Y in Three.js. */
 import { defaultElectricalDesign, parseElectricalDesign } from "./electrical";
 import type { ElectricalDesign } from "./electrical";
+import { parseMeshes } from "./meshModel";
+import type { MeshObstacle } from "./meshModel";
 export type SceneKind = "building" | "obstacle" | "panel";
 export type Position = { east: number; north: number; elevation: number };
 export type SceneObject = {
@@ -51,12 +53,13 @@ export const INITIAL_OBJECTS: SceneObject[] = [
 ];
 
 export type SolarProject = {
-  schema_version: 2;
+  schema_version: 3;
   latitude: number;
   longitude: number;
   timezone: string;
   objects: SceneObject[];
   electrical: ElectricalDesign;
+  meshes: MeshObstacle[];
 };
 
 const finite = (value: unknown): value is number =>
@@ -65,7 +68,7 @@ const finite = (value: unknown): value is number =>
 export function parseProject(raw: unknown): SolarProject {
   if (!raw || typeof raw !== "object") throw new Error("Projeto inválido.");
   const data = raw as Record<string, unknown>;
-  if ((data.schema_version !== 1 && data.schema_version !== 2) ||
+  if ((data.schema_version !== 1 && data.schema_version !== 2 && data.schema_version !== 3) ||
       !finite(data.latitude) || !finite(data.longitude) ||
       Math.abs(data.latitude) > 90 || Math.abs(data.longitude) > 180 ||
       typeof data.timezone !== "string" || data.timezone.length > 128 ||
@@ -96,13 +99,17 @@ export function parseProject(raw: unknown): SolarProject {
   const electrical = data.schema_version === 1
     ? defaultElectricalDesign(objects, false)
     : parseElectricalDesign(data.electrical);
+  const meshes = data.schema_version === 3 ? parseMeshes(data.meshes) : [];
+  for (const mesh of meshes) if (ids.has(mesh.id))
+    throw new Error("ID da malha colide com objeto existente");
   return {
-    schema_version: 2,
+    schema_version: 3,
     latitude: data.latitude as number,
     longitude: data.longitude as number,
     timezone: data.timezone as string,
     objects,
     electrical,
+    meshes,
   };
 }
 

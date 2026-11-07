@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import type { SceneObject, SolarSample } from "./model";
+import type { MeshObstacle } from "./meshModel";
 import { activeShading } from "./shadingModel";
 import type { ShadingDayResult } from "./shadingModel";
 
 export function ShadingPanel({
-  latitude, longitude, timezone, date, objects, selectedId, sample, sampleIndex,
+  latitude, longitude, timezone, date, objects, meshes, selectedId, sample, sampleIndex,
   result, onResult,
 }: {
   latitude: number;
@@ -12,6 +13,7 @@ export function ShadingPanel({
   timezone: string;
   date: string;
   objects: SceneObject[];
+  meshes: MeshObstacle[];
   selectedId: string | null;
   sample: SolarSample | null;
   sampleIndex: number;
@@ -32,7 +34,7 @@ export function ShadingPanel({
     setError("");
     onResult(null);
     return () => controllerRef.current?.abort();
-  }, [latitude, longitude, timezone, date, objects, rows, columns, onResult]);
+  }, [latitude, longitude, timezone, date, objects, meshes, rows, columns, onResult]);
 
   async function analyzeDay() {
     if (!objects.some((obj) => obj.kind === "panel")) {
@@ -54,7 +56,7 @@ export function ShadingPanel({
           latitude, longitude, local_date: date, timezone,
           interval_minutes: 15,
           sample_rows: rows, sample_columns: columns,
-          objects,
+          objects, meshes,
         }),
         signal: controller.signal,
       });

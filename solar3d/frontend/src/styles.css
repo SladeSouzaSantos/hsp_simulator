@@ -181,3 +181,11 @@ h2, p { margin: 0; }
 .catalog-import > button { margin: 8px 0; width: 100%; }
 .catalog-import-entries { overflow-y: auto; max-height: 310px; }
 .catalog-import-entries a { font-size: 11px; color: #93dacd; }
+
+/* F3.1 extra triangle-mesh obstacles */
+.mesh-list { margin: 12px 0; border: 1px solid #4c5d59; border-radius: 7px; }
+.mesh-row { display: flex; align-items: center; gap: 8px; padding: 8px;
+  border-bottom: 1px solid #2b484c; }
+.mesh-row:last-child { border-bottom: 0; }
+.mesh-row span { flex: 1; font-size: 10px; color: #b2c8d0; }
+.mesh-row button { padding: 6px 8px; font-size: 10px; }
