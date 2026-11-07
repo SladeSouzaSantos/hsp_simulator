@@ -16,6 +16,7 @@ from pvlib import solarposition
 from solar3d.backend.shading import (
     SceneObject, direction_towards_sun, fraction_blocked,
 )
+from solar3d.backend.mesh import MeshObstacle
 
 from solar3d.backend.electrical import (
     ElectricalValidationRequest, check_electrical_design,
@@ -56,6 +57,7 @@ class SolarDayRequest(BaseModel):
 
 class ShadingDayRequest(SolarDayRequest):
     objects: list[SceneObject] = Field(min_length=1, max_length=100)
+    meshes: list[MeshObstacle] = Field(default_factory=list, max_length=20)
     sample_rows: int = Field(default=6, ge=2, le=12)
     sample_columns: int = Field(default=4, ge=2, le=12)
     schema_version: int = Field(default=1, ge=1, le=1)
@@ -63,6 +65,7 @@ class ShadingDayRequest(SolarDayRequest):
     @model_validator(mode="after")
     def validate_scene_budget(self):
         ids = [obj.id for obj in self.objects]
+        ids.extend(mesh.id for mesh in self.meshes)
         if len(set(ids)) != len(ids):
             raise ValueError("Os IDs dos objetos devem ser únicos")
         panels = sum(obj.kind == "panel" for obj in self.objects)
@@ -73,8 +76,9 @@ class ShadingDayRequest(SolarDayRequest):
         # Conservatively budget all time steps; actual direct-sun count
         # is lower. Larger scenes need a queued/batched worker.
         steps = 25 * 60 // self.interval_minutes + 1
+        triangles = sum(len(mesh.triangles) for mesh in self.meshes)
         complexity = (steps * panels * self.sample_rows *
-                      self.sample_columns * max(1, len(self.objects) - 1))
+                      self.sample_columns * max(1, len(self.objects) - 1 + triangles))
         if complexity > 2_000_000:
             raise ValueError("Cena excede orçamento síncrono: diminua objetos ou amostragem")
         return self
@@ -147,6 +151,7 @@ def shading_day(request: ShadingDayRequest) -> dict:
             fraction, cells = fraction_blocked(
                 panel, objects, direction,
                 columns=request.sample_columns, rows=request.sample_rows,
+                meshes=request.meshes,
             )
             if fraction is not None:
                 eligible.append(fraction)

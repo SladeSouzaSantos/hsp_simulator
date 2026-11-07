@@ -16,6 +16,7 @@ import math
 
 import numpy as np
 from pydantic import BaseModel, Field
+from solar3d.backend.mesh import MeshObstacle, ray_mesh_mask
 
 EPSILON = 1e-5
 
@@ -125,6 +126,7 @@ def fraction_blocked(
     sun_direction: np.ndarray,
     columns: int = 4,
     rows: int = 6,
+    meshes: list[MeshObstacle] | None = None,
 ) -> tuple[float | None, list[int] | None]:
     """Area blocked by opaque boxes along rays toward a given sun position.
 
@@ -152,4 +154,9 @@ def fraction_blocked(
         blocked[remaining] |= ray_intersections_with_box(
             points[remaining], sun, obj,
         )
+    for mesh in meshes or []:
+        remaining = np.flatnonzero(~blocked)
+        if len(remaining) == 0:
+            break
+        blocked[remaining] |= ray_mesh_mask(points[remaining], sun, mesh)
     return float(np.mean(blocked)), blocked.astype(int).tolist()
