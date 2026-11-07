@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { CatalogImporter } from "./CatalogImporter";
 import type { SceneObject } from "./model";
 import type { ElectricalDesign, ElectricalResult, ElectricalString, InverterSpec,
   ModuleSpec, MpptSpec } from "./electrical";
@@ -254,6 +255,7 @@ export function ElectricalPanel({ objects, design, onChange, selectedId,
         </div>
       ) : <p className="hint">Selecione uma placa para associar seu modelo elétrico.</p>}
 
+      <CatalogImporter design={design} onChange={onChange} />
       <button type="button" className="ghost"
         onClick={() => setShowSpecs((value) => !value)}>
         {showSpecs ? "Ocultar parâmetros dos equipamentos" : "Editar catálogo e inversor"}

@@ -1,0 +1,33 @@
+{
+  "format": "greencity-os-equipment-v1",
+  "source_revision": "greencity-os/main: souenergy_verified_seed.dart (excerpt, not independent datasheet certification)",
+  "modules": [
+    {
+      "manufacturer": "Jetion Solar",
+      "modelName": "JT690SLk(B)",
+      "powerWp": 690,
+      "vOc": 49.7,
+      "vMp": 41.8,
+      "iSc": 17.31,
+      "iMp": 16.51,
+      "tempCoefVoc": -0.24,
+      "tempCoefIsc": 0.04,
+      "tempCoefPmax": -0.24,
+      "source_url": "https://assistencia.souenergy.com.br/docs/download/285"
+    }
+  ],
+  "inverters": [
+    {
+      "manufacturer": "AUXSOL",
+      "modelName": "ASN-6SL-G2",
+      "nominalPowerKw": 6,
+      "mpptCount": 2,
+      "maxInputVoltage": 550,
+      "minMpptVoltage": 40,
+      "maxMpptVoltage": 520,
+      "maxInputCurrentPerMppt": 18,
+      "maxShortCircuitCurrent": 22,
+      "source_url": "https://assistencia.souenergy.com.br/docs/download/360"
+    }
+  ]
+}

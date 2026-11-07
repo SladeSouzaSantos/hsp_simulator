@@ -174,3 +174,10 @@ h2, p { margin: 0; }
   border-radius: 7px; margin: 6px 0; }
 .issue-error { color: #ffc4c4; background: #4b2931; border: 1px solid #934c59; }
 .issue-warning { color: #f3daaa; background: #383321; border: 1px solid #7c6644; }
+
+/* Staged GreenCity OS catalog import and provenance */
+.catalog-import { margin-top: 18px; border-top: 1px solid #365260; padding-top: 16px; }
+.catalog-import > strong { display: block; font-size: 12px; margin-bottom: 7px; }
+.catalog-import > button { margin: 8px 0; width: 100%; }
+.catalog-import-entries { overflow-y: auto; max-height: 310px; }
+.catalog-import-entries a { font-size: 11px; color: #93dacd; }
