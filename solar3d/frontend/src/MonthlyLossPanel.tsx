@@ -157,6 +157,22 @@ export function MonthlyLossPanel({
         Para comparar, mantenha localização, fonte meteorológica, ano e período iguais.
       </p>}
       <div className="energy-export">
+        <button type="button" className="secondary" onClick={async () => {
+          try {
+            const response = await fetch("/solar3d/losses/report/pdf", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(result),
+            });
+            if (!response.ok) throw new Error("Falha ao gerar PDF mensal (HTTP " + response.status + ")");
+            const url = URL.createObjectURL(await response.blob());
+            const anchor = document.createElement("a");
+            anchor.href = url; anchor.download = "solar3d-perdas-mensais-mppt.pdf";
+            anchor.click();
+            window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+          } catch (cause: unknown) {
+            setError(cause instanceof Error ? cause.message : "Não foi possível gerar o relatório PDF.");
+          }
+        }}>PDF mensal por MPPT</button>
         <button type="button" onClick={exportCsv}>CSV de perdas mensais</button>
         <button type="button" className="secondary" onClick={()=>download(
           JSON.stringify(result,null,2),"solar3d-perdas-mensais.json","application/json")}>JSON técnico</button>
