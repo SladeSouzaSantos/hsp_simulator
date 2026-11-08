@@ -7,6 +7,7 @@ from core.app import SolarEngine
 from core.solar_engine_factory import SolarPerezEngineFactory
 from services.deps import Dependencies
 from schemas.schemas import ProjetoSolarRequest, ProjetoSolarResponse, ProjetoArranjoRequest, ArranjoSolarResponse
+from core.hourly_resource import HourlyResourceRequest, resource_hourly
 
 app = FastAPI(title='HSP Simulator — corrected hourly transposition', version='2.0.0',
               description='Perez/Hay-Davies hourly solar transposition with explicit sources and units',
@@ -48,3 +49,21 @@ def calcular_arranjo(dados: ProjetoArranjoRequest = Body(...), engine: SolarEngi
         raise HTTPException(422, detail=str(e)) from e
     except (RuntimeError, OSError, requests.RequestException) as e:
         raise HTTPException(503, detail=str(e)) from e
+
+
+@app.post('/recurso-solar/horario')
+def consultar_recurso_solar_horario(
+    dados: HourlyResourceRequest = Body(...),
+    engine: SolarEngine = Depends(get_engine),
+):
+    """Irradiancia POA horaria sem obstaculos para analise externa de sombra.
+
+    This opt-in endpoint does not change /calcular or /calcular-arranjo,
+    whose existing obstacle field remains supported for legacy callers.
+    """
+    try:
+        return resource_hourly(dados, engine.repository)
+    except ValueError as exc:
+        raise HTTPException(422, detail=str(exc)) from exc
+    except (RuntimeError, OSError, requests.RequestException) as exc:
+        raise HTTPException(503, detail=str(exc)) from exc
