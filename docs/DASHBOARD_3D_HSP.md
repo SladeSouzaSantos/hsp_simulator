@@ -1,104 +1,149 @@
-# Dashboard HSP — Análise de sombreamento em cena 3D
+# Dashboard HSP — editor Solar 3D óptico interativo
 
-## Objetivo
+## Escopo e arquitetura
 
-O dashboard Streamlit substitui o controle de **tela vertical retangular**
-por um visualizador 3D orbitável com módulos e obstáculos volumétricos.
-O propósito é **estimar redução de HSP por perda da irradiância direta
-na face do módulo**, sem modelar perdas elétricas ou especificações de
-inversores, strings, substrings ou MPPTs.
+O dashboard Streamlit agora utiliza um **componente Three.js interativo e
+bidirecional**. Arrastar objetos na cena atualiza os valores X/Y em estado de
+sessão Python, e essas posições são usadas diretamente para calcular a
+sombra horária no HSP.
 
-A cena do dashboard é uma implementação óptica separada do laboratório
-`solar3d/feature/solar3d-lab`. Esse laboratório inclui pesquisas elétricas
-que **não** foram incorporadas a esta mudança.
+**Sem mudanças nos endpoints, schemas ou contratos da API**: continuam
+inalterados `POST /calcular`, `/calcular-arranjo`,
+`/recurso-solar/horario` e o campo legado `config_obstaculo`.
+O mecanismo óptico de cena `scene3d` é opcional e acionado apenas pelo
+dashboard. O laboratório experimental `solar3d` não foi incorporado.
 
-## Como executar
+## Executar localmente
 
-No Windows (PowerShell), na pasta do repositório:
+Windows / PowerShell:
 
 ```powershell
 git fetch origin
-git switch feature/dashboard-solar3d-optical
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
+git switch dev
+git pull --ff-only origin dev
 python -m pip install -r requirements.txt
 python -m pytest -q
 python -m streamlit run dashboard.py
 ```
 
-Abrir http://localhost:8501. Para o cálculo mensal/anual, selecionar
-**NASA POWER** ou **PVGIS** (requer internet e disponibilidade da fonte).
-A cena 3D e a posição solar podem ser visualizadas sem solicitar dados
-meteorológicos à API externa.
+Enquanto a PR desta alteração ainda estiver aberta, trocar `dev`
+por `feature/dashboard-solar3d-drag-mppt-groups`.
 
-## Usar o visualizador
+Abrir `http://localhost:8501`. A cena e a posição solar são
+calculadas localmente, mas **o navegador precisa alcançar
+`cdn.jsdelivr.net`** para carregar Three.js e OrbitControls.
+O cálculo HSP anual com NASA POWER ou PVGIS necessita acesso à fonte
+climática. O pacote do componente está em
+`dashboard/components/solar3d_drag/`.
 
-1. No painel lateral, informar local, azimute, inclinação, tecnologia,
-   **comprimento e largura físicos** do módulo. Em Retrato o comprimento
-   acompanha a rampa; em Paisagem, a largura a acompanha.
-2. Preencher **Altura da borda inferior ao solo (m)**. Para inclinação β,
-   o centro do plano do módulo é
-   `altura_borda + comprimento_na_rampa × sen(β) / 2`. A altura informada
-   nunca é reinterpretada como altura central.
-3. Configurar número de módulos, módulos por fileira, espaçamento,
-   obstáculos (X=Leste, Y=Norte), largura, profundidade e altura. Os
-   obstáculos são caixas retangulares apoiadas no plano do solo.
-4. Alterar data, horário e offset UTC para prévia da direção solar,
-   projeção das sombras no solo e fração de **área frontal bloqueada**.
-   Girar/zoom com o mouse no gráfico Plotly/WebGL. Posições são editadas
-   numericamente, não por arraste direto de objetos.
-5. Clicar em **Calcular e comparar** para usar o ano completo de
-   irradiância horária do motor HSP. Conferir HSP com/sombra, GHI
-   horizontal, média mensal e perdas percentuais ópticas.
+## Usar o editor
 
-O campo de altura aplica-se ao ponto mais baixo do **plano do módulo**
-(não à face inferior de uma espessura de moldura). O desenho aproxima
-a placa por uma superfície sem espessura. Não representa levantamento
-georreferenciado nem a geometria física dos suportes.
+- **Clicar numa placa ou obstáculo:** seleciona o objeto. Enquanto
+  o botão esquerdo estiver pressionado, mover o mouse desloca o objeto
+  **no plano horizontal (Leste X, Norte Y)**. Soltar grava a posição.
+- **Ctrl+clique** (ou Command no macOS): adiciona/remove placas da
+  seleção. Arrastar uma das selecionadas move todas, preservando suas
+  posições relativas. A seleção também pode incluir obstáculos.
+- **Shift+clique em uma placa:** seleciona as placas do mesmo MPPT.
+  Alternativamente, marcar *Arrastar MPPT inteiro ao clicar numa placa*.
+- **Arrastar o fundo vazio:** orbita a câmera. Roda do mouse: zoom.
+  **Esc:** limpa a seleção.
+- **Alturas:** são editadas **somente por campo numérico** em
+  *Gerenciar MPPTs, placas e dimensões*. Um arraste nunca altera Z.
+  A altura base do painel lateral é o padrão para **placas novas**;
+  existe botão para aplicá-la a todas as placas existentes.
+- **Adicionar MPPT:** cria grupo visual rotulado; é permitido ter
+  múltiplas placas por grupo e transferir placas entre grupos via
+  seletor. Excluir grupo só é possível se vazio.
+- **Adicionar placa neste MPPT:** cria placa com ID persistente,
+  dimensões/orientação compartilhadas, altura inferior própria e
+  posição independente.
+- **Adicionar obstáculo:** cria uma nova caixa; largura,
+  profundidade e altura são campos numéricos, e X/Y são arrastáveis.
+- **Data, hora e fuso:** controlam o Sol na prévia. O botão
+  **Calcular e comparar** executa a análise climática horária usando
+  o estado confirmado dos objetos.
 
-## Contrato físico e compatibilidade
+Limites para preservar responsividade: até **48 placas**, **16 MPPTs
+visuais**, **32 obstáculos**. Projetos grandes podem exigir mais tempo
+de processamento.
 
-- Plano local: X=Leste, Y=Norte, Z=vertical; azimute 0=N, 90=L,
-  180=S, 270=O. Inclinação 0=horizontal e 90=vertical.
-- Obstáculos são volumes ortogonais aos eixos locais; oclusão da
-  face é feita por interseção de raios com caixas AABB.
-- Cada módulo é amostrado em uma grade de 5×5 pontos por hora para
-  o HSP e 8×6 pontos na prévia. A média de frações por módulo é
-  ponderada por igual área, pois os módulos da cena têm dimensões
-  idênticas; não é uma perda de potência elétrica.
-- A série POA do pvlib é mantida e o bloqueio atua **uma única vez**
-  na componente direta: `POA_com_sombra = POA_global − sombra ×
-  POA_direta`. Difusa, refletida e componente traseira bifacial
-  permanecem sem obstrução.
-- Uma série de clima completa tem 8760 ou 8784 horas. O raycast
-  funciona por lotes de 168 horas para limitar memória.
-- Sem obstáculos, os resultados com/sombra são idênticos.
-- A API `POST /calcular`, `/calcular-arranjo`, o parâmetro legado
-  `config_obstaculo` e `POST /recurso-solar/horario` permanecem
-  compatíveis. Somente o fluxo de UI antigo foi retirado do dashboard.
-- Não há sincronização desta cena com projetos do GreenCity OS.
-  A cena é mantida pela sessão Streamlit, não em banco persistente.
+## Referência geométrica e ótica
 
-## Limitações
+Coordenadas métricas ENU: X Leste, Y Norte, Z altura. O azimute do
+painel é geográfico (0=N, 90=L, 180=S, 270=O); inclinação 0° significa
+plano horizontal. Comprimento acompanha a rampa em Retrato; largura
+acompanha em Paisagem.
 
-Amostragem em grade pode não detectar sombras muito finas. O 3D
-mostra uma projeção aproximada no chão, limitada visualmente a 25 m
-quando o Sol está próximo ao horizonte; essa limitação de exibição
-**não afeta** o raycast que produz o HSP. Não modelamos terreno,
-árvores, obstáculos rotacionados, oclusão difusa do céu, IAM, albedo
-obstruído, múltiplas orientações por fileira, perdas por célula, bypass,
-mismatch, MPPT ou DC/AC. A previsão não é um relatório certificado.
+Para cada placa individual:
 
-## Testes
-
-```bash
-python -m pytest -q tests/unit/test_scene3d_shading.py tests/dashboard
-python -m pytest -q
+```
+altura_do_centro = altura_da_borda_inferior +
+                   comprimento_na_rampa * sen(inclinacao)/2
 ```
 
-Smoke recomendado: obstáculo ao Norte e Sol ao Norte sombreiam; girar
-o Sol ao Sul não sombreia. Aumentar a altura da borda reduz, sob
-geometria adequada, a sombra recebida. Retrato/Paisagem mudam a
-altura do centro e as dimensões do plano. Remover obstáculos produz
-HSP com sombra igual à referência. Verificar resultados idênticos
-da API legada antes/depois da atualização.
+A referência de entrada é sempre **a borda mais baixa do plano do
+módulo**, não o centro, moldura ou espessura do suporte. Placas da
+mesma cena compartilham dimensões, inclinação e azimute, mas podem
+ter posições e alturas inferiores individuais.
+
+O motor calcula interseção de raios solares com volumes retangulares
+(AABB), usando amostras na face frontal: **5×5 para a série horária** e
+**8×6 para a prévia**. A sombra de cada placa é calculada
+independentemente, inclusive se cada uma está em um MPPT diferente.
+A fração média da área frontal bloqueada reduz somente a parcela
+direta da irradiância incidente:
+
+```
+POA_com_sombra = POA_global - fracao_sombreada * POA_direta
+```
+
+Grupos MPPT são **somente etiquetas para selecionar e arrastar
+placas**; a soma óptica não simula strings em série/paralelo, corrente
+comum, diodos, mismatch, recorte do inversor ou DC/AC.
+
+## Testes e homologação
+
+```bash
+python -m pytest -q
+node --input-type=module --check < dashboard/components/solar3d_drag/editor.js
+node --test tests/dashboard/test_scene3d_selection.mjs
+```
+
+Os testes verificam: raycasting por placa, grupos e posições
+independentes, altura pela borda, `Ctrl`/ `Shift` e
+sincronização apenas de X/Y. O teste `compileall` e `pytest` é
+executado no GitHub Actions; testes JS de seleção também constam do CI.
+
+**Roteiro manual no navegador:**
+
+1. Criar MPPT 1 com duas placas e MPPT 2 com uma placa.
+2. Arrastar somente a primeira: a segunda não deve se mover.
+3. Selecionar as duas do MPPT 1 com `Ctrl`, arrastar e conferir
+   preservação do espaçamento.
+4. `Shift+clique` na placa do MPPT 2 e mover o grupo.
+5. Criar dois obstáculos, arrastar um diante de uma das placas,
+   alterar a altura digitando e conferir a sombra na prévia.
+6. Clicar em **Calcular e comparar** e observar HSP com/sombra.
+   Sem obstáculos, a diferença deve ser zero.
+7. Recarregar a aba: a cena ainda **não é persistida em banco**,
+   logo deve retornar ao estado inicial da sessão.
+8. Executar regressões HTTP dos contratos legados: não houve
+   alteração da API nesta implementação.
+
+## Limitações explícitas
+
+Os módulos são superfícies sem espessura, obstáculos são paralelepípedos
+sem rotação em terreno plano. O editor não simula a interferência elétrica
+entre placas, sombreamento entre fileiras, vegetação, horizonte,
+oclusão difusa da abóbada, albedo obstruído ou geometria georreferenciada.
+A projeção de sombra **desenhada** no solo é ilustrativa e encurtada a
+25 metros; o cálculo numérico de sombra usa interseção de raios
+independente dessa visualização. A amostragem de área pode perder
+sombras finas. Não equivale a certificação de engenharia nem a PVsyst.
+
+Os controles agrupam placas com **mesma orientação e dimensões**;
+não é possível modelar orientações diferentes por MPPT nesta versão.
+A implementação usa scripts ES modules remotos do jsDelivr:
+para instalações completamente offline, será necessário empacotar
+Three.js localmente.
