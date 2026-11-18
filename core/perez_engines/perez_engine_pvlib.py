@@ -2,7 +2,7 @@ from .perez_engine_base import BasePerezEngine
 from core.solar_physics import compute_poa, summarize_poa
 
 class PerezEnginePVLib(BasePerezEngine):
-    def calcular_hsp_corrigido_inc_azi(self, dados, config_obstaculo=None):
+    def calcular_hsp_corrigido_inc_azi(self, dados, config_obstaculo=None, scene3d=None):
         if dados.get('hourly') is None:
             raise ValueError('Transposição Perez requer GHI, DHI e DNI em série horária (W/m²)')
         result = summarize_poa(compute_poa(
@@ -11,7 +11,8 @@ class PerezEnginePVLib(BasePerezEngine):
             bifaciality=self.fator_bifacial if self.is_bifacial else None,
             obstacle=config_obstaculo, module_height=self.altura_instalacao,
             module_length=self.comprimento_modulo if self.orientacao == 'Retrato' else self.largura_modulo,
-            module_width=self.largura_modulo if self.orientacao == 'Retrato' else self.comprimento_modulo))
+            module_width=self.largura_modulo if self.orientacao == 'Retrato' else self.comprimento_modulo,
+            scene3d=scene3d))
         if config_obstaculo:
             from .shadow_engine import ShadowEngine
             length = self.comprimento_modulo if self.orientacao == 'Retrato' else self.largura_modulo
@@ -24,6 +25,29 @@ class PerezEnginePVLib(BasePerezEngine):
                 'altura_ajustada_para_evitar_solo': effective > self.altura_instalacao + 1e-8,
                 'distancia_referencia': 'borda_mais_proxima_modulo',
                 'limite': 'apenas_feixe_direto; sem perdas difusas, traseiras ou eletricas',
+            }
+        if scene3d is not None:
+            from core.scene3d_shading import validate_scene, center_height
+            clean = validate_scene(scene3d)
+            m = clean['module']
+            result['sombra_geometria'] = {
+                'tipo': 'cena_3d_modulos_e_volumes',
+                'modelo': 'raycast_AABB_amostragem_frontal_5x5',
+                'referencia_altura': 'borda_inferior_do_plano',
+                'altura_borda_inferior_m': m['bottom_height_m'],
+                'alturas_borda_inferior_m': {
+                    p['id']: p['bottom_height_m'] for p in clean['panels']},
+                'alturas_centro_m': {
+                    p['id']: round(center_height(p['bottom_height_m'],
+                        m['length_m'], m['tilt_deg']), 5)
+                    for p in clean['panels']},
+                'grupos_mppt_apenas_visuais': {
+                    g['id']: [p['id'] for p in clean['panels']
+                              if p['mppt_id'] == g['id']]
+                    for g in clean['groups']},
+                'modulos': len(clean['panels']),
+                'obstaculos': len(clean['obstacles']),
+                'limite': 'somente_poa_direto; sem perdas eletricas/difusas',
             }
         result['modelo'] = self.model
         result['metadata'] = dados.get('metadata', {})

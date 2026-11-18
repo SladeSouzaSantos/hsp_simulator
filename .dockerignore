@@ -1,0 +1,9 @@
+.git
+**/__pycache__
+**/.pytest_cache
+**/.venv
+**/node_modules
+**/*.pyc
+**/*.log
+.env
+dashboard/components/solar3d_drag/editor.bundle.js

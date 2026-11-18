@@ -4,6 +4,41 @@ API REST em **FastAPI** e dashboard em **Streamlit** para estimar a irradiação
 
 > **IMPORTANTE — O que esta versão realmente garante:** corrigimos a inconsistência matemática de Leste/Oeste do motor antigo, eliminamos a aplicação de um modelo horário sobre **médias mensais diárias**, normalizamos o azimute e explicitamos a origem/unidades dos dados. **A precisão dos novos números NÃO foi atestada contra o PVsyst**; é necessário executar uma validação cruzada independente antes de uso em propostas comerciais ou laudos.
 
+## Dashboard 3D de sombreamento (estudo óptico)
+
+O dashboard começa com o **sombreamento desativado**. Somente ao ativar
+`Analisar sombreamento (visualizador 3D)` no menu lateral a cena aparece
+e o cálculo de HSP passa a aplicar perdas ópticas. Desativar a opção
+novamente restaura o cálculo sem obstáculos.
+
+Quando habilitado, o dashboard inclui um editor **Three.js/WebGL**
+bidirecional com **rosa dos ventos geográfica N/S/L/O** (Norte destacado):
+placas e obstáculos são selecionáveis e arrastáveis no plano horizontal;
+`Ctrl+clique` permite seleção múltipla, e `Shift+clique` seleciona
+o grupo MPPT inteiro. Grupos MPPT são somente **organização visual**
+para 1 a várias placas; não modelam circuitos elétricos.
+A altura de cada placa é ajustada apenas numericamente. São suportados
+até 48 módulos, 16 grupos e 32 obstáculos, com data/hora solar e HSP
+recalculado a partir das posições movidas. O visualizador agora
+carrega Three.js **do próprio aplicativo**, sem CDN durante a execução.
+
+**Importante ao rodar sem Docker:** antes de iniciar o Streamlit, executar
+`npm install` e `npm run build` na pasta
+`dashboard/components/solar3d_drag`. A imagem Docker compila o bundle
+automaticamente em um estágio Node.js. Confira
+[diagnóstico de carregamento e instruções](docs/DASHBOARD_3D_HSP.md)
+caso o navegador não exiba o editor.
+O campo de montagem informa a **altura da borda inferior do módulo ao
+solo**; o centro é derivado da inclinação e do comprimento na rampa.
+O antigo controle visual de **tela retangular vertical** foi retirado
+do dashboard. O motor legado da API continua disponível para clientes
+existentes, sem alteração de contratos.
+
+O cálculo compara HSP sem/com sombreamento aplicando a fração de área
+frontal bloqueada **somente ao POA direto**. Não incorpora simulação
+elétrica I–V, diodos, MPPT ou perdas DC/AC; não há certificação PVsyst.
+Veja o [manual de uso e limitações](docs/DASHBOARD_3D_HSP.md).
+
 ## Histórico da versão e auditoria da branch `dev`
 
 Esta revisão foi realizada a partir do projeto completo enviado em ZIP da branch `dev`, com as bases INPE/LABREN, API, dashboard e testes. **O pacote distribuído não contém `.git`, caches ou ambiente virtual**: as alterações não são publicadas automaticamente no GitHub. Preserve seu histórico Git ao copiar as alterações ou aplicar um patch; antes do commit, execute `git status` e `git diff`.

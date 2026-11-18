@@ -25,7 +25,8 @@ class SolarDashboardRenderer:
 
     def renderizar_layout_comparativo(self, lat, lon, inc, azi, alb, h, tec_chave,
              modo_bifacial, orientacao, usar_obstaculo, config_obstaculo,
-             nome_exibicao, provider_forcado=None, modelo='perez'):
+             nome_exibicao, provider_forcado=None, modelo='perez',
+             scene3d=None, module_length=2.278, module_width=1.134):
         try:
             with st.spinner('Carregando série horária e calculando irradiância...'):
                 climate = _load_provider_data(
@@ -39,9 +40,14 @@ class SolarDashboardRenderer:
                 def engine(tilt, azimuth, bifacial):
                     return PerezEnginePVLib(lat, lon, tilt, azimuth, is_bifacial=bifacial,
                         tecnologia_celula=tec_chave, albedo=alb, altura_instalacao=h,
-                        orientacao=orientacao, model=modelo)
-                projet = self.engine.calcular_projeto_solar(engine(inc,azi,modo_bifacial),climate,
-                          config_obstaculo if usar_obstaculo else None)
+                        orientacao=orientacao, model=modelo,
+                        comprimento_modulo=module_length,
+                        largura_modulo=module_width)
+                projet = (self.engine.calcular_projeto_solar(
+                    engine(inc,azi,modo_bifacial), climate, scene3d=scene3d)
+                    if scene3d is not None else self.engine.calcular_projeto_solar(
+                        engine(inc,azi,modo_bifacial), climate,
+                        config_obstaculo if usar_obstaculo else None))
                 horizontal = self.engine.calcular_projeto_solar(engine(0,0,False),climate)
                 # Horizontal reference deliberately monofacial: direct comparison to GHI.
             real = projet['kWh/m²/dia']['real']
@@ -50,23 +56,38 @@ class SolarDashboardRenderer:
             st.caption(f"Fonte: {climate['metadata']['source']} | resolução: {climate['metadata']['temporal_resolution']} | modelo: {modelo} | azimute 0°=N, 90°=L, 180°=S, 270°=O")
             baseline = projet['kWh/m²/dia']['referencia']
             a,b,c,d = st.columns(4)
-            a.metric('HSP com sombra (kWh/m²/dia)', f"{real['media']:.3f}")
-            b.metric('HSP sem sombra (kWh/m²/dia)', f"{baseline['media_sem_sombra']:.3f}")
+            if scene3d is not None:
+                a.metric('HSP com sombra (kWh/m²/dia)', f"{real['media']:.3f}")
+                b.metric('HSP sem sombra (kWh/m²/dia)', f"{baseline['media_sem_sombra']:.3f}")
+            else:
+                a.metric('HSP no plano (kWh/m²/dia)', f"{real['media']:.3f}")
+                b.metric('HSP de referência (kWh/m²/dia)', f"{baseline['media_sem_sombra']:.3f}")
             c.metric('GHI horizontal (kWh/m²/dia)', f"{ref['media']:.3f}")
             d.metric('Perda anual de irradiância frontal', projet['perda_sombreamento_estimada'])
+            if scene3d is None and not usar_obstaculo:
+                st.caption('Cálculo sem obstáculos: análise de sombreamento não ativada.')
             if modo_bifacial:
                 st.info('HSP equivalente bifacial = HSP frontal + irradiância traseira estimada × fator de bifacialidade. Não representa energia elétrica de saída nem validou o sombreamento por fileiras.')
-            if usar_obstaculo:
-                st.warning('Sombreamento geométrico de tela vertical retangular: apenas perda de irradiância DIRETA, não de energia elétrica. Difusa, refletida e face traseira não são obstruídas neste estágio.')
-                geometry = projet['detalhes'].get('sombra_geometria') or {}
-                if geometry.get('altura_ajustada_para_evitar_solo'):
-                    st.warning(f"Altura informada do centro ({h:.3f} m) colocaria a borda inferior abaixo do solo. Para a geometria de sombra, centro ajustado para {geometry['altura_centro_utilizada_m']:.3f} m. Informe uma altura real maior para melhorar a confiabilidade.")
+            if scene3d is not None:
+                from core.scene3d_shading import validate_scene
+                setup = validate_scene(scene3d)
+                st.info(f"3D óptico: {len(setup['panels'])} módulo(s), "
+                        f"{len(setup['groups'])} MPPT(s) visuais, "
+                        f"{len(setup['obstacles'])} obstáculo(s). "
+                        "Sombra amostrada na FACE dos módulos, só no POA direto; "
+                        "HSP calculado como média da irradiância incidente no arranjo. "
+                        "Não representa energia DC/AC nem efeitos em MPPTs.")
+            elif usar_obstaculo:
+                st.warning('Obstáculo legado da API: apenas sombra geométrica sobre irradiância direta.')
+
+            hsp_label = 'HSP com sombra' if scene3d is not None else 'HSP no plano'
+            reference_label = 'HSP sem sombra' if scene3d is not None else 'HSP referência'
             df = pd.DataFrame({'Mês': MONTHS,
-                'HSP com sombra': real['mensal'],
-                'HSP sem sombra': baseline['mensal_sem_sombra'],
+                hsp_label: real['mensal'],
+                reference_label: baseline['mensal_sem_sombra'],
                 'GHI horizontal': ref['mensal'],
                 'Perda frontal de sombra (%)': projet['detalhes'].get('perda_sombreamento_mensal_pct', [0.]*12)})
-            st.bar_chart(df.set_index('Mês')[['HSP com sombra', 'HSP sem sombra', 'GHI horizontal']])
+            st.bar_chart(df.set_index('Mês')[[hsp_label, reference_label, 'GHI horizontal']])
             st.dataframe(df, use_container_width=True, hide_index=True)
             st.download_button('Baixar resultados (CSV)', df.to_csv(index=False).encode('utf-8-sig'),
                                'hsp_mensal.csv', mime='text/csv')
