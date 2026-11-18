@@ -8,6 +8,7 @@ e afeta somente o POA direto; não estima perdas elétricas.
 from __future__ import annotations
 
 import math
+import re
 from typing import Mapping
 
 import numpy as np
@@ -23,8 +24,18 @@ def _number(value, name, low=None, high=None):
     return n
 
 
+def _identifier(value, name):
+    if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", value):
+        raise ValueError(f"{name} deve possuir ID alfanumérico estável")
+    return value
+
+
 def validate_scene(scene: Mapping) -> dict:
-    """Validação estrita; não reinterpreta campos da API HSP legada."""
+    """Valida a cena óptica; MPPTs são grupos VISUAIS, não circuitos elétricos.
+
+    Mantém compatibilidade com cenas antigas (count/columns sem panels).
+    Posições explícitas são ENU, em metros; os arrastes só alteram X e Y.
+    """
     if not isinstance(scene, Mapping) or not isinstance(scene.get("module"), Mapping):
         raise ValueError("Cena 3D exige configuração de módulo")
     m = scene["module"]
@@ -34,8 +45,8 @@ def validate_scene(scene: Mapping) -> dict:
         "bottom_height_m": _number(m.get("bottom_height_m"), "Borda inferior", 0, 500),
         "tilt_deg": _number(m.get("tilt_deg"), "Inclinação", 0, 90),
         "azimuth_deg": _number(m.get("azimuth_deg"), "Azimute", 0, 360),
-        "count": int(_number(m.get("count", 1), "Quantidade", 1, 24)),
-        "columns": int(_number(m.get("columns", 1), "Colunas", 1, 24)),
+        "count": int(_number(m.get("count", 1), "Quantidade", 1, 48)),
+        "columns": int(_number(m.get("columns", 1), "Colunas", 1, 48)),
         "gap_m": _number(m.get("gap_m", 0.15), "Espaçamento", 0, 10),
     }
     if module["columns"] > module["count"]:
@@ -43,21 +54,85 @@ def validate_scene(scene: Mapping) -> dict:
     for field in ("count", "columns"):
         if float(m.get(field, 1)) != module[field]:
             raise ValueError(f"{field} deve ser inteiro")
-    raw_obstacles = scene.get("obstacles", [])
-    if not isinstance(raw_obstacles, list) or len(raw_obstacles) > 12:
-        raise ValueError("Cena permite no máximo 12 obstáculos")
-    obstacles = []
-    for i, raw in enumerate(raw_obstacles):
+
+    raw_groups = scene.get("groups", [{"id": "mppt-1", "name": "MPPT 1"}])
+    if not isinstance(raw_groups, list) or not 1 <= len(raw_groups) <= 16:
+        raise ValueError("Cena precisa de 1 a 16 grupos MPPT")
+    groups = []
+    for idx, raw in enumerate(raw_groups):
         if not isinstance(raw, Mapping):
-            raise ValueError(f"Obstáculo {i+1} inválido")
+            raise ValueError(f"Grupo {idx + 1} inválido")
+        ident = _identifier(raw.get("id"), "ID de MPPT")
+        label = raw.get("name", ident)
+        if not isinstance(label, str) or not 1 <= len(label.strip()) <= 80:
+            raise ValueError("Nome de MPPT inválido")
+        groups.append({"id": ident, "name": label.strip()})
+    group_ids = {g["id"] for g in groups}
+    if len(group_ids) != len(groups):
+        raise ValueError("IDs de MPPT duplicados")
+
+    raw_panels = scene.get("panels")
+    panels = []
+    if raw_panels is None:
+        # Layout legado: centralizado, em múltiplas fileiras, sem deslocamentos.
+        az = math.radians(module["azimuth_deg"])
+        beta = math.radians(module["tilt_deg"])
+        along = (-math.sin(az) * math.cos(beta), -math.cos(az) * math.cos(beta))
+        across = (math.cos(az), -math.sin(az))
+        side_pitch = module["width_m"] + module["gap_m"]
+        row_pitch = module["length_m"] * math.cos(beta) + module["gap_m"]
+        for idx in range(module["count"]):
+            row, col = divmod(idx, module["columns"])
+            side = (col - (module["columns"] - 1) / 2) * side_pitch
+            panels.append({
+                "id": f"pv-{idx + 1}", "mppt_id": groups[0]["id"],
+                "x_m": side * across[0] - row * row_pitch * (-along[0]),
+                "y_m": side * across[1] - row * row_pitch * (-along[1]),
+                "bottom_height_m": module["bottom_height_m"],
+            })
+    else:
+        if not isinstance(raw_panels, list) or not 1 <= len(raw_panels) <= 48:
+            raise ValueError("Cena permite de 1 a 48 placas")
+        for idx, raw in enumerate(raw_panels):
+            if not isinstance(raw, Mapping):
+                raise ValueError(f"Placa {idx + 1} inválida")
+            mppt = _identifier(raw.get("mppt_id"), "Grupo MPPT da placa")
+            if mppt not in group_ids:
+                raise ValueError(f"Placa {idx + 1} aponta para MPPT inexistente")
+            panels.append({
+                "id": _identifier(raw.get("id"), "ID da placa"),
+                "mppt_id": mppt,
+                "x_m": _number(raw.get("x_m"), "X da placa", -1000, 1000),
+                "y_m": _number(raw.get("y_m"), "Y da placa", -1000, 1000),
+                "bottom_height_m": _number(
+                    raw.get("bottom_height_m", module["bottom_height_m"]),
+                    "Altura inferior da placa", 0, 500),
+            })
+        module["count"] = len(panels)
+        module["columns"] = min(module["columns"], len(panels))
+    if len({p["id"] for p in panels}) != len(panels):
+        raise ValueError("IDs de placas duplicados")
+
+    raw_obstacles = scene.get("obstacles", [])
+    if not isinstance(raw_obstacles, list) or len(raw_obstacles) > 32:
+        raise ValueError("Cena permite no máximo 32 obstáculos")
+    obstacles = []
+    for idx, raw in enumerate(raw_obstacles):
+        if not isinstance(raw, Mapping):
+            raise ValueError(f"Obstáculo {idx + 1} inválido")
         obstacles.append({
+            "id": _identifier(raw.get("id", f"obs-{idx + 1}"),
+                              "ID do obstáculo"),
             "x_m": _number(raw.get("x_m"), "X obstáculo", -1000, 1000),
             "y_m": _number(raw.get("y_m"), "Y obstáculo", -1000, 1000),
             "width_m": _number(raw.get("width_m"), "Largura obstáculo", 0.01, 1000),
             "depth_m": _number(raw.get("depth_m"), "Profundidade obstáculo", 0.01, 1000),
             "height_m": _number(raw.get("height_m"), "Altura obstáculo", 0.01, 500),
         })
-    return {"module": module, "obstacles": obstacles}
+    if len({o["id"] for o in obstacles}) != len(obstacles):
+        raise ValueError("IDs de obstáculos duplicados")
+    return {"module": module, "panels": panels, "groups": groups,
+            "obstacles": obstacles}
 
 
 def center_height(bottom_height_m, length_m, tilt_deg):
@@ -68,20 +143,18 @@ def center_height(bottom_height_m, length_m, tilt_deg):
 
 
 def module_corners(scene):
-    """Vértices (n, 4, 3) na ordem da face: (Leste, Norte, Cima)."""
-    return _panel_points(validate_scene(scene)["module"], rows=2, cols=2,
-                         corners=True)
+    """Vértices (n,4,3) ENU, com altura inferior própria de cada placa."""
+    return _panel_points(validate_scene(scene), rows=2, cols=2, corners=True)
 
 
-def _panel_points(m, rows=5, cols=5, corners=False):
+def _panel_points(clean, rows=5, cols=5, corners=False):
+    m = clean["module"]
     az = math.radians(m["azimuth_deg"])
     beta = math.radians(m["tilt_deg"])
     length, width = m["length_m"], m["width_m"]
-    # s positivo = borda elevada, voltada contra o azimute frontal.
     along = np.array([-math.sin(az) * math.cos(beta),
                       -math.cos(az) * math.cos(beta), math.sin(beta)])
     across = np.array([math.cos(az), -math.sin(az), 0.])
-    front = np.array([math.sin(az), math.cos(az), 0.])
     if corners:
         s_values = np.array([-.5, -.5, .5, .5]) * length
         w_values = np.array([-.5, .5, .5, -.5]) * width
@@ -90,17 +163,15 @@ def _panel_points(m, rows=5, cols=5, corners=False):
         ww = (np.arange(cols) + .5) / cols - .5
         s_values, w_values = np.meshgrid(ss * length, ww * width, indexing="ij")
         s_values, w_values = s_values.ravel(), w_values.ravel()
-    side_pitch = width + m["gap_m"]
-    row_pitch = length * math.cos(beta) + m["gap_m"]
-    base_center = np.array([0., 0., center_height(
-        m["bottom_height_m"], length, m["tilt_deg"])])
-    panels = []
-    for index in range(m["count"]):
-        row, col = divmod(index, m["columns"])
-        pos = base_center + ((col - (m["columns"] - 1) / 2.) * side_pitch * across
-                             - row * row_pitch * front)
-        panels.append(pos + s_values[:, None] * along + w_values[:, None] * across)
-    return np.stack(panels, axis=0)
+    points = []
+    for panel in clean["panels"]:
+        center = np.array([
+            panel["x_m"], panel["y_m"],
+            center_height(panel["bottom_height_m"], length, m["tilt_deg"]),
+        ])
+        points.append(center + s_values[:, None] * along +
+                      w_values[:, None] * across)
+    return np.stack(points, axis=0)
 
 
 def _ray_blocked(points, directions, obstacles):
@@ -145,7 +216,7 @@ def shade_by_panel(scene, solar_elevation_deg, solar_azimuth_deg, rows=5, cols=5
     if not np.isfinite(alt).all() or not np.isfinite(azi).all():
         raise ValueError("Posição solar não finita")
     flat_alt, flat_azi = alt.ravel(), azi.ravel()
-    points = _panel_points(clean["module"], rows=rows, cols=cols)
+    points = _panel_points(clean, rows=rows, cols=cols)
     n_panels, n_points = points.shape[:2]
     samples = points.reshape((-1, 3))
     out = np.zeros((len(flat_alt), n_panels), dtype=float)
