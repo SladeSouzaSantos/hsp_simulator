@@ -56,10 +56,16 @@ class SolarDashboardRenderer:
             st.caption(f"Fonte: {climate['metadata']['source']} | resolução: {climate['metadata']['temporal_resolution']} | modelo: {modelo} | azimute 0°=N, 90°=L, 180°=S, 270°=O")
             baseline = projet['kWh/m²/dia']['referencia']
             a,b,c,d = st.columns(4)
-            a.metric('HSP com sombra (kWh/m²/dia)', f"{real['media']:.3f}")
-            b.metric('HSP sem sombra (kWh/m²/dia)', f"{baseline['media_sem_sombra']:.3f}")
+            if scene3d is not None:
+                a.metric('HSP com sombra (kWh/m²/dia)', f"{real['media']:.3f}")
+                b.metric('HSP sem sombra (kWh/m²/dia)', f"{baseline['media_sem_sombra']:.3f}")
+            else:
+                a.metric('HSP no plano (kWh/m²/dia)', f"{real['media']:.3f}")
+                b.metric('HSP de referência (kWh/m²/dia)', f"{baseline['media_sem_sombra']:.3f}")
             c.metric('GHI horizontal (kWh/m²/dia)', f"{ref['media']:.3f}")
             d.metric('Perda anual de irradiância frontal', projet['perda_sombreamento_estimada'])
+            if scene3d is None and not usar_obstaculo:
+                st.caption('Cálculo sem obstáculos: análise de sombreamento não ativada.')
             if modo_bifacial:
                 st.info('HSP equivalente bifacial = HSP frontal + irradiância traseira estimada × fator de bifacialidade. Não representa energia elétrica de saída nem validou o sombreamento por fileiras.')
             if scene3d is not None:
@@ -74,12 +80,14 @@ class SolarDashboardRenderer:
             elif usar_obstaculo:
                 st.warning('Obstáculo legado da API: apenas sombra geométrica sobre irradiância direta.')
 
+            hsp_label = 'HSP com sombra' if scene3d is not None else 'HSP no plano'
+            reference_label = 'HSP sem sombra' if scene3d is not None else 'HSP referência'
             df = pd.DataFrame({'Mês': MONTHS,
-                'HSP com sombra': real['mensal'],
-                'HSP sem sombra': baseline['mensal_sem_sombra'],
+                hsp_label: real['mensal'],
+                reference_label: baseline['mensal_sem_sombra'],
                 'GHI horizontal': ref['mensal'],
                 'Perda frontal de sombra (%)': projet['detalhes'].get('perda_sombreamento_mensal_pct', [0.]*12)})
-            st.bar_chart(df.set_index('Mês')[['HSP com sombra', 'HSP sem sombra', 'GHI horizontal']])
+            st.bar_chart(df.set_index('Mês')[[hsp_label, reference_label, 'GHI horizontal']])
             st.dataframe(df, use_container_width=True, hide_index=True)
             st.download_button('Baixar resultados (CSV)', df.to_csv(index=False).encode('utf-8-sig'),
                                'hsp_mensal.csv', mime='text/csv')

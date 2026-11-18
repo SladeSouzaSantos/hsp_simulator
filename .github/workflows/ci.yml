@@ -12,4 +12,4 @@ jobs:
       - run: python -m compileall -q .
       - run: python -m pytest -q
       - run: node --input-type=module --check < dashboard/components/solar3d_drag/editor.js
-      - run: node --test tests/dashboard/test_scene3d_selection.mjs
+      - run: node --test tests/dashboard/test_scene3d_selection.mjs tests/dashboard/test_scene3d_compass.mjs

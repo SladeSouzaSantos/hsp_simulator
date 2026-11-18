@@ -2,7 +2,13 @@
 
 ## Escopo e arquitetura
 
-O dashboard Streamlit agora utiliza um **componente Three.js interativo e
+O dashboard Streamlit inicia **sem análise de sombreamento**. A opção
+**Analisar sombreamento (visualizador 3D)**, desativada por padrão no
+menu lateral, habilita o componente Three.js e a redução de irradiância
+direta. Desativá-la novamente esconde o editor e volta a calcular HSP
+**sem obstáculos**, mesmo que haja uma cena editada guardada na sessão.
+
+Quando habilitado, utiliza um **componente Three.js interativo e
 bidirecional**. Arrastar objetos na cena atualiza os valores X/Y em estado de
 sessão Python, e essas posições são usadas diretamente para calcular a
 sombra horária no HSP.
@@ -27,7 +33,7 @@ python -m streamlit run dashboard.py
 ```
 
 Enquanto a PR desta alteração ainda estiver aberta, trocar `dev`
-por `feature/dashboard-solar3d-drag-mppt-groups`.
+por `feature/dashboard-optional-3d-compass`.
 
 Abrir `http://localhost:8501`. A cena e a posição solar são
 calculadas localmente, mas **o navegador precisa alcançar
@@ -37,6 +43,24 @@ climática. O pacote do componente está em
 `dashboard/components/solar3d_drag/`.
 
 ## Usar o editor
+
+1. Inicie a aplicação com a análise de sombra **desativada**. O gráfico
+   compara HSP no plano sem perdas por obstáculos e não monta a cena 3D.
+2. Marque `Analisar sombreamento (visualizador 3D)`. O editor aparece,
+   com campos específicos de comprimento, largura e altura inferior.
+3. Adicione placas, MPPTs e obstáculos; ao clicar em
+   **Calcular e comparar**, o cálculo usa a cena 3D e considera
+   somente perdas ópticas na irradiância direta.
+4. Desmarque a opção e calcule novamente para excluir todas as
+   perdas por obstáculo, sem precisar apagar a cena.
+
+**Rosa dos ventos geográfica:** o mapa 3D exibe N (Norte, em vermelho),
+S (Sul), L (Leste) e O (Oeste), com setas fixas ao terreno. A bússola
+não acompanha a rotação da câmera ou a orientação dos módulos.
+No sistema Three.js, **+X = Leste, −X = Oeste, −Z = Norte,
++Z = Sul**. Ela não é arrastável e fica fora da região ocupada pelos
+objetos para não atrapalhar o editor.
+
 
 - **Clicar numa placa ou obstáculo:** seleciona o objeto. Enquanto
   o botão esquerdo estiver pressionado, mover o mouse desloca o objeto
@@ -107,10 +131,11 @@ comum, diodos, mismatch, recorte do inversor ou DC/AC.
 ```bash
 python -m pytest -q
 node --input-type=module --check < dashboard/components/solar3d_drag/editor.js
-node --test tests/dashboard/test_scene3d_selection.mjs
+node --test tests/dashboard/test_scene3d_selection.mjs tests/dashboard/test_scene3d_compass.mjs
 ```
 
-Os testes verificam: raycasting por placa, grupos e posições
+Os testes verificam: modo 3D desligado/ligado, pontos cardeais N/S/L/O,
+raycasting por placa, grupos e posições
 independentes, altura pela borda, `Ctrl`/ `Shift` e
 sincronização apenas de X/Y. O teste `compileall` e `pytest` é
 executado no GitHub Actions; testes JS de seleção também constam do CI.
