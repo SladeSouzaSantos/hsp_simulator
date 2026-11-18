@@ -65,7 +65,8 @@ class SolarDashboardRenderer:
             if scene3d is not None:
                 from core.scene3d_shading import validate_scene
                 setup = validate_scene(scene3d)
-                st.info(f"3D óptico: {setup['module']['count']} módulo(s), "
+                st.info(f"3D óptico: {len(setup['panels'])} módulo(s), "
+                        f"{len(setup['groups'])} MPPT(s) visuais, "
                         f"{len(setup['obstacles'])} obstáculo(s). "
                         "Sombra amostrada na FACE dos módulos, só no POA direto; "
                         "HSP calculado como média da irradiância incidente no arranjo. "

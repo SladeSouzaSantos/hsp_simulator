@@ -6,9 +6,15 @@ API REST em **FastAPI** e dashboard em **Streamlit** para estimar a irradiação
 
 ## Dashboard 3D de sombreamento (estudo óptico)
 
-O dashboard Streamlit permite visualizar módulos inclinados e obstáculos
-volumétricos em uma cena 3D interativa (Plotly/WebGL), com data/hora solar,
-dimensões de módulo, número de placas e posição de obstáculos.
+O dashboard Streamlit inclui um editor **Three.js/WebGL** bidirecional:
+placas e obstáculos são selecionáveis e arrastáveis no plano horizontal;
+`Ctrl+clique` permite seleção múltipla, e `Shift+clique` seleciona
+o grupo MPPT inteiro. Grupos MPPT são somente **organização visual**
+para 1 a várias placas; não modelam circuitos elétricos.
+A altura de cada placa é ajustada apenas numericamente. São suportados
+até 48 módulos, 16 grupos e 32 obstáculos, com data/hora solar e HSP
+recalculado a partir das posições movidas. O navegador precisa acessar
+o CDN jsDelivr para carregar o editor Three.js.
 O campo de montagem informa a **altura da borda inferior do módulo ao
 solo**; o centro é derivado da inclinação e do comprimento na rampa.
 O antigo controle visual de **tela retangular vertical** foi retirado

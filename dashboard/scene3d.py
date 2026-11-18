@@ -16,6 +16,7 @@ import streamlit as st
 from core.scene3d_shading import (
     center_height, module_corners, shade_by_panel, validate_scene,
 )
+from dashboard.scene3d_component import interactive_scene
 
 
 def _box_vertices(obs):
@@ -142,69 +143,219 @@ def make_scene_figure(scene, elevation, solar_azimuth):
     return fig, shade
 
 
-def _obstacle_controls():
-    if "hsp3d_obstacle_ids" not in st.session_state:
-        st.session_state["hsp3d_obstacle_ids"] = [1]
-        st.session_state["hsp3d_next_id"] = 2
-    ids = st.session_state["hsp3d_obstacle_ids"]
-    if st.button("Adicionar obstáculo", disabled=len(ids) >= 12):
-        ids.append(st.session_state["hsp3d_next_id"])
-        st.session_state["hsp3d_next_id"] += 1
+def _initial_scene(tilt, azimuth, bottom_height, panel_length, panel_width):
+    return {
+        "module": {
+            "length_m": panel_length, "width_m": panel_width,
+            "bottom_height_m": bottom_height, "tilt_deg": tilt,
+            "azimuth_deg": azimuth, "count": 1, "columns": 1,
+            "gap_m": 0.15,
+        },
+        "groups": [{"id": "mppt-1", "name": "MPPT 1"}],
+        "panels": [{
+            "id": "pv-1", "mppt_id": "mppt-1", "x_m": 0., "y_m": 0.,
+            "bottom_height_m": bottom_height,
+        }],
+        "obstacles": [{
+            "id": "obs-1", "x_m": 0., "y_m": 3., "width_m": 3.,
+            "depth_m": .5, "height_m": 3.,
+        }],
+    }
+
+
+def _add_panel(scene, group_id):
+    if len(scene["panels"]) >= 48:
+        raise ValueError("O editor suporta no máximo 48 placas")
+    number = st.session_state["hsp3d_next_panel_id"]
+    st.session_state["hsp3d_next_panel_id"] += 1
+    preceding = [p for p in scene["panels"] if p["mppt_id"] == group_id]
+    last = preceding[-1] if preceding else None
+    scene["panels"].append({
+        "id": f"pv-{number}", "mppt_id": group_id,
+        "x_m": round((last["x_m"] if last else 0.) +
+                     scene["module"]["width_m"] + scene["module"]["gap_m"], 3),
+        "y_m": last["y_m"] if last else 0.,
+        "bottom_height_m": scene["module"]["bottom_height_m"],
+    })
+
+
+def _apply_drag(scene, incoming):
+    """Copiar somente XY com IDs estáveis. JS não controla z, MPPT ou dimensões.
+
+    Snapshots antigos (ex. após remover uma placa) são rejeitados; o
+    Python é a fonte de verdade para os campos de engenharia.
+    """
+    if not isinstance(incoming, dict) or not isinstance(incoming.get("scene"), dict):
+        return False
+    candidate = validate_scene(incoming["scene"])
+    if ({p["id"] for p in scene["panels"]} != {p["id"] for p in candidate["panels"]} or
+        {o["id"] for o in scene["obstacles"]} !=
+            {o["id"] for o in candidate["obstacles"]}):
+        return False
+    changed = False
+    for key in ("panels", "obstacles"):
+        from_client = {p["id"]: p for p in candidate[key]}
+        for original in scene[key]:
+            updated = from_client[original["id"]]
+            for field in ("x_m", "y_m"):
+                if original[field] != updated[field]:
+                    original[field] = updated[field]
+                    changed = True
+    return changed
+
+
+def _group_controls(scene):
+    st.markdown("#### Placas e grupos MPPT")
+    st.caption("MPPT é uma etiqueta de agrupamento geométrico; não se "
+               "calculam curvas elétricas, corrente de string ou perdas DC/AC.")
+    a, b = st.columns(2)
+    if a.button("Adicionar grupo MPPT", disabled=len(scene["groups"]) >= 16,
+                key="hsp3d_add_mppt"):
+        number = st.session_state["hsp3d_next_mppt_id"]
+        st.session_state["hsp3d_next_mppt_id"] += 1
+        scene["groups"].append({"id": f"mppt-{number}", "name": f"MPPT {number}"})
         st.rerun()
-    obstacles = []
-    for identifier in ids:
-        with st.expander(f"Obstáculo {identifier}", expanded=(len(ids)==1)):
-            if st.button("Remover", key=f"hsp3d_remove_{identifier}"):
-                st.session_state["hsp3d_obstacle_ids"].remove(identifier)
+    if b.button("Aplicar altura padrão a todas as placas",key="hsp3d_apply_height"):
+        for panel in scene["panels"]:
+            panel["bottom_height_m"] = scene["module"]["bottom_height_m"]
+            st.session_state[f"hsp3d_z_{panel['id']}"] = panel["bottom_height_m"]
+        st.rerun()
+
+    for group in list(scene["groups"]):
+        grouped = [p for p in scene["panels"] if p["mppt_id"] == group["id"]]
+        with st.expander(f"{group['name']} · {len(grouped)} placa(s)",
+                         expanded=(len(scene["groups"]) == 1)):
+            name = st.text_input("Nome do grupo", group["name"],
+                                 key=f"hsp3d_name_{group['id']}",max_chars=80)
+            if name.strip():
+                group["name"] = name.strip()
+            left,right = st.columns(2)
+            if left.button("Adicionar placa neste MPPT", key=f"hsp3d_add_{group['id']}",
+                           disabled=len(scene["panels"]) >= 48):
+                _add_panel(scene, group["id"])
                 st.rerun()
-            a,b,c,d,e = st.columns(5)
-            x = a.number_input("X: Leste (m)",-1000.,1000.,0.,step=.25,key=f"hsp3d_x_{identifier}")
-            y = b.number_input("Y: Norte (m)",-1000.,1000.,3.,step=.25,key=f"hsp3d_y_{identifier}")
-            w = c.number_input("Largura (m)",.01,1000.,3.,step=.25,key=f"hsp3d_w_{identifier}")
-            depth = d.number_input("Profundidade (m)",.01,1000.,.5,step=.25,key=f"hsp3d_d_{identifier}")
-            h = e.number_input("Altura (m)",.01,500.,3.,step=.25,key=f"hsp3d_h_{identifier}")
-            obstacles.append(dict(x_m=x,y_m=y,width_m=w,depth_m=depth,height_m=h))
-    return obstacles
+            if right.button("Excluir grupo vazio", key=f"hsp3d_del_{group['id']}",
+                            disabled=len(scene["groups"]) == 1 or bool(grouped)):
+                scene["groups"].remove(group)
+                st.rerun()
+            for panel in grouped:
+                st.caption(f"**{panel['id']}** · X Leste {panel['x_m']:.2f} m · "
+                           f"Y Norte {panel['y_m']:.2f} m")
+                col_z, col_group, col_del = st.columns([2, 2, 1])
+                hkey = f"hsp3d_z_{panel['id']}"
+                if hkey not in st.session_state:
+                    st.session_state[hkey] = panel["bottom_height_m"]
+                panel["bottom_height_m"] = col_z.number_input(
+                    f"Altura borda inferior {panel['id']} (m)",
+                    0., 500., step=.05, format="%.3f", key=hkey)
+                group_ids = [g["id"] for g in scene["groups"]]
+                chosen = col_group.selectbox(
+                    f"MPPT da placa {panel['id']}",
+                    options=group_ids, index=group_ids.index(panel["mppt_id"]),
+                    format_func=lambda gid: next(
+                        g["name"] for g in scene["groups"] if g["id"] == gid),
+                    key=f"hsp3d_group_{panel['id']}")
+                if chosen != panel["mppt_id"]:
+                    panel["mppt_id"] = chosen
+                    st.rerun()
+                if col_del.button("Remover",key=f"hsp3d_remove_{panel['id']}",
+                                  disabled=len(scene["panels"]) == 1):
+                    scene["panels"].remove(panel)
+                    st.rerun()
+
+
+def _obstacle_controls(scene):
+    st.markdown("#### Obstáculos")
+    if st.button("Adicionar obstáculo", key="hsp3d_add_obstacle",
+                 disabled=len(scene["obstacles"]) >= 32):
+        number = st.session_state["hsp3d_next_obstacle_id"]
+        st.session_state["hsp3d_next_obstacle_id"] += 1
+        scene["obstacles"].append({
+            "id": f"obs-{number}", "x_m": 0.,
+            "y_m": 3. + min(number - 1, 25),
+            "width_m": 3., "depth_m": .5, "height_m": 3.,
+        })
+        st.rerun()
+    if not scene["obstacles"]:
+        st.caption("Sem obstáculos: o HSP com e sem sombra será igual.")
+    for obs in list(scene["obstacles"]):
+        with st.expander(f"{obs['id']} · X {obs['x_m']:.2f} / Y {obs['y_m']:.2f} m"):
+            if st.button("Remover obstáculo", key=f"hsp3d_remove_{obs['id']}"):
+                scene["obstacles"].remove(obs)
+                st.rerun()
+            ca, cb, cc = st.columns(3)
+            for col, field, label, max_value in (
+                (ca, "width_m", "Largura", 1000.),
+                (cb, "depth_m", "Profundidade", 1000.),
+                (cc, "height_m", "Altura", 500.),
+            ):
+                key = f"hsp3d_{field}_{obs['id']}"
+                if key not in st.session_state:
+                    st.session_state[key] = obs[field]
+                obs[field] = col.number_input(
+                    f"{label} de {obs['id']} (m)", min_value=.01,
+                    max_value=max_value, step=.1, format="%.2f", key=key)
 
 
 def render_scene_editor(lat, lon, tilt, azimuth, bottom_height,
                         panel_length, panel_width):
-    """Retorna a cena em metros; chamada pela tela após o formulário do módulo."""
-    st.subheader("Visualizador 3D de sombreamento")
-    st.caption("Gire a cena com o mouse, aproxime com a roda. Mova e dimensione "
-               "os obstáculos pelos campos abaixo. A borda inferior é o ponto "
-               "mais baixo do plano inclinado do módulo.")
-    c1,c2,c3 = st.columns(3)
-    count = c1.number_input("Quantidade de módulos",1,24,1,step=1)
-    columns = c2.number_input("Módulos por fileira",1,int(count),min(2,int(count)),step=1)
-    gap = c3.number_input("Espaçamento (m)",0.,10.,.15,step=.05)
-    scene = dict(
-        module=dict(
-            length_m=panel_length, width_m=panel_width,
-            bottom_height_m=bottom_height, tilt_deg=tilt, azimuth_deg=azimuth,
-            count=int(count), columns=int(columns), gap_m=gap,
-        ),
-        obstacles=_obstacle_controls(),
-    )
+    """Editor de geometria 3D com estado bidirecional e seleção múltipla."""
+    st.subheader("Visualizador 3D interativo de sombreamento")
+    st.caption("Clique e arraste placas/obstáculos para mover em X/Y. "
+               "Ctrl+clique: várias placas; Shift+clique: todas do mesmo MPPT. "
+               "A altura só muda nos campos numéricos. Arraste sobre o "
+               "espaço vazio para girar a câmera.")
+
+    if "hsp3d_scene_state" not in st.session_state:
+        st.session_state["hsp3d_scene_state"] = _initial_scene(
+            tilt, azimuth, bottom_height, panel_length, panel_width)
+        st.session_state["hsp3d_next_panel_id"] = 2
+        st.session_state["hsp3d_next_mppt_id"] = 2
+        st.session_state["hsp3d_next_obstacle_id"] = 2
+    scene = st.session_state["hsp3d_scene_state"]
+    module = scene["module"]
+    module.update({
+        "length_m": float(panel_length), "width_m": float(panel_width),
+        "tilt_deg": float(tilt), "azimuth_deg": float(azimuth),
+        "bottom_height_m": float(bottom_height),
+        "count": len(scene["panels"]),
+        "columns": min(int(module.get("columns", 1)), len(scene["panels"])),
+    })
+    with st.expander("Gerenciar MPPTs, placas e dimensões", expanded=False):
+        _group_controls(scene)
+        st.divider()
+        _obstacle_controls(scene)
+
     clean = validate_scene(scene)
-    st.caption(f"Altura geométrica do centro: **{center_height(bottom_height, panel_length, tilt):.3f} m** "
-               "(calculada automaticamente a partir da borda inferior). "
-               "Esta altura não é solicitada como entrada.")
+    st.session_state["hsp3d_scene_state"] = clean
     c1,c2,c3 = st.columns(3)
-    day = c1.date_input("Data para prévia solar",value=date.today())
-    local_hour = c2.slider("Hora local",0.,23.75,15.,.25,format="%.2f h")
-    offset = c3.selectbox("Fuso da prévia",list(range(-12,15)),index=9,
-                          format_func=lambda x:f"UTC{x:+d}")
-    elevation, sun_azi = preview_sun(lat,lon,day,local_hour,offset)
-    fig, fractions = make_scene_figure(clean, elevation, sun_azi)
-    st.plotly_chart(fig, use_container_width=True, key="hsp3d_scene")
+    day = c1.date_input("Data da prévia solar", value=date.today(),
+                         key="hsp3d_day")
+    local_hour = c2.slider("Hora local", 0., 23.75, 15., .25,
+                           key="hsp3d_hour")
+    offset = c3.selectbox("Fuso da prévia", list(range(-12,15)),
+                          index=9, format_func=lambda x:f"UTC{x:+d}",
+                          key="hsp3d_offset")
+    elevation, sun_azi = preview_sun(lat, lon, day, local_hour, offset)
+    ratios = shade_by_panel(clean, [elevation], [sun_azi], rows=8, cols=6)[0]
+    try:
+        from_client = interactive_scene(clean, elevation, sun_azi,
+                                        ratios, key="hsp3d_drag_editor")
+        if _apply_drag(clean, from_client):
+            st.session_state["hsp3d_scene_state"] = validate_scene(clean)
+            st.rerun()
+    except ValueError as exc:
+        st.warning(f"Movimentação inválida foi ignorada: {exc}")
     if elevation > 0:
-        st.caption(f"Sol: elevação {elevation:.1f}°, azimute {sun_azi:.1f}° "
-                   f"· área frontal sombreada na prévia: {fractions.mean()*100:.1f}%. "
-                   "A prévia da face usa grade 8×6; cálculo horário usa 5×5.")
+        st.caption(f"Sol: elevação {elevation:.1f}°, azimute {sun_azi:.1f}°. "
+                   f"Prévia: {ratios.mean()*100:.1f}% de área frontal sombreada "
+                   "(grade 8×6; cálculo horário 5×5).")
     else:
-        st.caption("Sol abaixo do horizonte; nenhuma contribuição direta neste instante.")
-    st.info("Cálculo HSP: a sombra 3D reduz apenas o POA direto, mantendo a "
-            "componente difusa, a refletida e a aproximação bifacial sem "
-            "obstrução. Não calcula perdas em strings, diodos ou MPPTs.")
+        st.caption("Sol abaixo do horizonte; nenhuma contribuição direta nesta prévia.")
+    st.caption(f"{len(clean['panels'])} placa(s), {len(clean['groups'])} grupo(s) "
+               f"MPPT, {len(clean['obstacles'])} obstáculo(s). Altura de centro "
+               "calculada a partir da borda inferior de cada placa.")
+    st.info("Análise exclusivamente óptica: a média de sombra geométrica "
+            "atinge somente o POA direto. MPPT é apenas agrupamento visual; "
+            "não se calculam perdas elétricas.")
     return clean

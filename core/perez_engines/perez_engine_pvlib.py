@@ -35,9 +35,17 @@ class PerezEnginePVLib(BasePerezEngine):
                 'modelo': 'raycast_AABB_amostragem_frontal_5x5',
                 'referencia_altura': 'borda_inferior_do_plano',
                 'altura_borda_inferior_m': m['bottom_height_m'],
-                'altura_centro_m': round(center_height(
-                    m['bottom_height_m'], m['length_m'], m['tilt_deg']), 5),
-                'modulos': m['count'],
+                'alturas_borda_inferior_m': {
+                    p['id']: p['bottom_height_m'] for p in clean['panels']},
+                'alturas_centro_m': {
+                    p['id']: round(center_height(p['bottom_height_m'],
+                        m['length_m'], m['tilt_deg']), 5)
+                    for p in clean['panels']},
+                'grupos_mppt_apenas_visuais': {
+                    g['id']: [p['id'] for p in clean['panels']
+                              if p['mppt_id'] == g['id']]
+                    for g in clean['groups']},
+                'modulos': len(clean['panels']),
                 'obstaculos': len(clean['obstacles']),
                 'limite': 'somente_poa_direto; sem perdas eletricas/difusas',
             }
