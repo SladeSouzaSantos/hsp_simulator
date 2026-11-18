@@ -24,7 +24,8 @@ def validate_weather(df):
 
 def compute_poa(weather, latitude, longitude, tilt, azimuth, albedo=0.2,
                 model='perez', bifaciality=None, obstacle=None,
-                module_height=0.2, module_length=2.278, module_width=1.134):
+                module_height=0.2, module_length=2.278, module_width=1.134,
+                scene3d=None):
     import pvlib
     df = validate_weather(weather)
     if model not in ('perez', 'haydavies', 'isotropic'):
@@ -56,6 +57,18 @@ def compute_poa(weather, latitude, longitude, tilt, azimuth, albedo=0.2,
         front['poa_sky_diffuse'] = np.minimum(dhi, ghi)
         front['poa_ground_diffuse'] = np.zeros_like(ghi)
     shadow = np.zeros(len(df))
+    if scene3d is not None:
+        if obstacle is not None:
+            raise ValueError('Cena 3D e obstáculo legado não podem ser combinados')
+        from core.scene3d_shading import hourly_direct_loss, validate_scene
+        module = validate_scene(scene3d)['module']
+        if any(abs(a - b) > 1e-6 for a, b in (
+            (module['tilt_deg'], tilt), (module['azimuth_deg'], azimuth),
+            (module['length_m'], module_length),
+            (module['width_m'], module_width))):
+            raise ValueError('Geometria 3D diferente da orientação usada no POA')
+        shadow = hourly_direct_loss(scene3d, 90 - zen, solar_az,
+                                    rows=5, cols=5).reshape(-1)
     if obstacle:
         from .perez_engines.shadow_engine import ShadowEngine
         shadow = ShadowEngine.hourly_direct_loss(

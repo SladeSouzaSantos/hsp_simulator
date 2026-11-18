@@ -4,6 +4,22 @@ API REST em **FastAPI** e dashboard em **Streamlit** para estimar a irradiação
 
 > **IMPORTANTE — O que esta versão realmente garante:** corrigimos a inconsistência matemática de Leste/Oeste do motor antigo, eliminamos a aplicação de um modelo horário sobre **médias mensais diárias**, normalizamos o azimute e explicitamos a origem/unidades dos dados. **A precisão dos novos números NÃO foi atestada contra o PVsyst**; é necessário executar uma validação cruzada independente antes de uso em propostas comerciais ou laudos.
 
+## Dashboard 3D de sombreamento (estudo óptico)
+
+O dashboard Streamlit permite visualizar módulos inclinados e obstáculos
+volumétricos em uma cena 3D interativa (Plotly/WebGL), com data/hora solar,
+dimensões de módulo, número de placas e posição de obstáculos.
+O campo de montagem informa a **altura da borda inferior do módulo ao
+solo**; o centro é derivado da inclinação e do comprimento na rampa.
+O antigo controle visual de **tela retangular vertical** foi retirado
+do dashboard. O motor legado da API continua disponível para clientes
+existentes, sem alteração de contratos.
+
+O cálculo compara HSP sem/com sombreamento aplicando a fração de área
+frontal bloqueada **somente ao POA direto**. Não incorpora simulação
+elétrica I–V, diodos, MPPT ou perdas DC/AC; não há certificação PVsyst.
+Veja o [manual de uso e limitações](docs/DASHBOARD_3D_HSP.md).
+
 ## Histórico da versão e auditoria da branch `dev`
 
 Esta revisão foi realizada a partir do projeto completo enviado em ZIP da branch `dev`, com as bases INPE/LABREN, API, dashboard e testes. **O pacote distribuído não contém `.git`, caches ou ambiente virtual**: as alterações não são publicadas automaticamente no GitHub. Preserve seu histórico Git ao copiar as alterações ou aplicar um patch; antes do commit, execute `git status` e `git diff`.

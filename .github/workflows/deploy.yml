@@ -132,15 +132,29 @@ jobs:
             PORT=8091
           fi
           curl --fail --show-error --silent --location --retry 10 --retry-delay 15 --retry-all-errors --connect-timeout 10 --max-time 30 -o /dev/null -w 'HTTP %{http_code}\n' "http://${{ secrets.SERVER_HOST }}:$PORT/"
-      - name: Verify DEV hourly solar resource endpoint
-        if: github.ref_name == 'dev'
+      - name: Verify hourly endpoint and legacy routes (DEV or PROD)
         shell: bash
         run: |
           set -euo pipefail
-          # The dashboard healthcheck alone does not prove that FastAPI's
-          # new route survived the reverse proxy and container rollout.
-          # OpenAPI probes the registered contract without NASA/PVGIS calls.
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            PORT=8090
+          else
+            PORT=8091
+          fi
+          # Check the API's registered routes without triggering expensive
+          # NASA/PVGIS calls. Preserve both legacy sizing contracts.
           curl --fail --show-error --silent --location --retry 12 --retry-delay 5 --retry-all-errors --connect-timeout 10 --max-time 30 \
-            -o /tmp/hsp-dev-openapi.json \
-            "http://${{ secrets.SERVER_HOST }}:8091/api/openapi.json"
-          python3 -c "import json; p=json.load(open('/tmp/hsp-dev-openapi.json', encoding='utf-8')).get('paths', {}); assert 'post' in p.get('/recurso-solar/horario', {}), 'Hourly POST route not exposed by DEV API'"
+            -o /tmp/hsp-openapi.json \
+            "http://${{ secrets.SERVER_HOST }}:$PORT/api/openapi.json"
+          python3 -c "import json; p=json.load(open('/tmp/hsp-openapi.json', encoding='utf-8')).get('paths', {}); required=['/recurso-solar/horario','/calcular','/calcular-arranjo']; missing=[k for k in required if 'post' not in p.get(k, {})]; assert not missing, 'Missing POST API contracts: '+repr(missing)"
+      - name: Verify PUBLIC hourly endpoint after production deployment
+        if: github.ref_name == 'main'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The Android app uses HTTPS at the public HSP domain, so a
+          # passing private Swarm healthcheck is insufficient for release.
+          curl --fail --show-error --silent --location --retry 12 --retry-delay 5 --retry-all-errors --connect-timeout 10 --max-time 30 \
+            -o /tmp/hsp-public-openapi.json \
+            https://hsp.greencity.net.br/api/openapi.json
+          python3 -c "import json; p=json.load(open('/tmp/hsp-public-openapi.json', encoding='utf-8')).get('paths', {}); assert 'post' in p.get('/recurso-solar/horario', {}), 'Hourly POST not yet published at the public HTTPS endpoint'"
