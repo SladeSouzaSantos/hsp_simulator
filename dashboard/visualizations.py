@@ -80,12 +80,14 @@ class SolarDashboardRenderer:
             elif usar_obstaculo:
                 st.warning('Obstáculo legado da API: apenas sombra geométrica sobre irradiância direta.')
 
+            hsp_label = 'HSP com sombra' if scene3d is not None else 'HSP no plano'
+            reference_label = 'HSP sem sombra' if scene3d is not None else 'HSP referência'
             df = pd.DataFrame({'Mês': MONTHS,
-                'HSP com sombra': real['mensal'],
-                'HSP sem sombra': baseline['mensal_sem_sombra'],
+                hsp_label: real['mensal'],
+                reference_label: baseline['mensal_sem_sombra'],
                 'GHI horizontal': ref['mensal'],
                 'Perda frontal de sombra (%)': projet['detalhes'].get('perda_sombreamento_mensal_pct', [0.]*12)})
-            st.bar_chart(df.set_index('Mês')[['HSP com sombra', 'HSP sem sombra', 'GHI horizontal']])
+            st.bar_chart(df.set_index('Mês')[[hsp_label, reference_label, 'GHI horizontal']])
             st.dataframe(df, use_container_width=True, hide_index=True)
             st.download_button('Baixar resultados (CSV)', df.to_csv(index=False).encode('utf-8-sig'),
                                'hsp_mensal.csv', mime='text/csv')
