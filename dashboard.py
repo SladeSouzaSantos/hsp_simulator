@@ -4,6 +4,8 @@ from pathlib import Path
 import streamlit as st
 from core.app import SolarEngine
 from dashboard.visualizations import SolarDashboardRenderer
+from dashboard.scene3d import render_scene_editor
+from core.scene3d_shading import center_height
 from services.deps import Dependencies
 from utils.constants import ALBEDO_REFERENCE, CELL_TECHNOLOGY_REFERENCE
 
@@ -45,19 +47,28 @@ with st.sidebar:
     bifacial = st.toggle('Módulo bifacial (aproximação de face traseira isolada)',value=False)
     technology = st.selectbox('Tecnologia da célula',list(CELL_TECHNOLOGY_REFERENCE))
     orientation = st.selectbox('Disposição do módulo',['Retrato','Paisagem'])
-    height = st.number_input('Altura do centro do módulo (m)',min_value=0.,value=.2,step=.1)
+    module_length = st.number_input('Comprimento físico do módulo (m)', min_value=.1,
+                                     max_value=10., value=2.278, step=.01, format='%.3f')
+    module_width = st.number_input('Largura física do módulo (m)', min_value=.1,
+                                    max_value=10., value=1.134, step=.01, format='%.3f')
+    bottom_height = st.number_input('Altura da borda inferior ao solo (m)',
+                                    min_value=0., max_value=500., value=.15,
+                                    step=.05, format='%.3f')
     terrain = st.selectbox('Superfície do solo',list(ALBEDO_REFERENCE))
     albedo = st.slider('Albedo',0.,1.,float(ALBEDO_REFERENCE[terrain]),.01)
-    shade = st.toggle('Considerar obstáculo (tela retangular vertical, feixe direto)',value=False)
-    obstacle = None
-    if shade:
-        obstacle = {'altura_obstaculo':st.number_input('Altura obstáculo (m)',.0,100.,3.),
-                    'distancia_obstaculo':st.number_input('Distância até borda (m)',.01,1000.,2.),
-                    'largura_obstaculo':st.number_input('Largura obstáculo (m)',.01,1000.,5.),
-                    'referencia_azimutal_obstaculo':st.number_input('Direção do obstáculo (°)',0.,360.,0.)}
+# Retrato: comprimento físico acompanha a rampa; paisagem: largura acompanha.
+slope_length = module_length if orientation == 'Retrato' else module_width
+face_width = module_width if orientation == 'Retrato' else module_length
+height_center = center_height(bottom_height, slope_length, tilt)
+scene3d = render_scene_editor(lat, lon, tilt, azi, bottom_height,
+                               slope_length, face_width)
+if st.button('Calcular e comparar', type='primary'):
+    renderer.renderizar_layout_comparativo(
+        lat, lon, tilt, azi, albedo, height_center, technology,
+        bifacial, orientation, bool(scene3d['obstacles']), None,
+        name, forced, model.lower(), scene3d=scene3d,
+        module_length=module_length, module_width=module_width)
 
-if st.button('Calcular e comparar',type='primary'):
-    renderer.renderizar_layout_comparativo(lat,lon,tilt,azi,albedo,height,technology,
-        bifacial,orientation,shade,obstacle,name,forced,model.lower())
-
-st.caption('ATENÇÃO: sombra de tela vertical retangular calculada apenas para a irradiância direta; sem obstrução difusa/refletida, perdas elétricas, fileiras ou validação PVsyst. Dados horários/modelados não substituem medição em campo.')
+st.caption('Estimativa ótica: sombra amostrada na face dos módulos reduz somente '
+           'a irradiância DIRETA. O HSP não representa produção DC/AC, perda '
+           'elétrica de strings ou laudo de sombreamento certificado.')
