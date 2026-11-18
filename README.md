@@ -6,7 +6,13 @@ API REST em **FastAPI** e dashboard em **Streamlit** para estimar a irradiação
 
 ## Dashboard 3D de sombreamento (estudo óptico)
 
-O dashboard Streamlit inclui um editor **Three.js/WebGL** bidirecional:
+O dashboard começa com o **sombreamento desativado**. Somente ao ativar
+`Analisar sombreamento (visualizador 3D)` no menu lateral a cena aparece
+e o cálculo de HSP passa a aplicar perdas ópticas. Desativar a opção
+novamente restaura o cálculo sem obstáculos.
+
+Quando habilitado, o dashboard inclui um editor **Three.js/WebGL**
+bidirecional com **rosa dos ventos geográfica N/S/L/O** (Norte destacado):
 placas e obstáculos são selecionáveis e arrastáveis no plano horizontal;
 `Ctrl+clique` permite seleção múltipla, e `Shift+clique` seleciona
 o grupo MPPT inteiro. Grupos MPPT são somente **organização visual**
