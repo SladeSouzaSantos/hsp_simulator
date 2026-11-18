@@ -77,7 +77,6 @@ def validate_scene(scene: Mapping) -> dict:
         # Layout legado: centralizado, em múltiplas fileiras, sem deslocamentos.
         az = math.radians(module["azimuth_deg"])
         beta = math.radians(module["tilt_deg"])
-        along = (-math.sin(az) * math.cos(beta), -math.cos(az) * math.cos(beta))
         across = (math.cos(az), -math.sin(az))
         side_pitch = module["width_m"] + module["gap_m"]
         row_pitch = module["length_m"] * math.cos(beta) + module["gap_m"]
@@ -86,8 +85,8 @@ def validate_scene(scene: Mapping) -> dict:
             side = (col - (module["columns"] - 1) / 2) * side_pitch
             panels.append({
                 "id": f"pv-{idx + 1}", "mppt_id": groups[0]["id"],
-                "x_m": side * across[0] - row * row_pitch * (-along[0]),
-                "y_m": side * across[1] - row * row_pitch * (-along[1]),
+                "x_m": side * across[0] - row * row_pitch * math.sin(az),
+                "y_m": side * across[1] - row * row_pitch * math.cos(az),
                 "bottom_height_m": module["bottom_height_m"],
             })
     else:
