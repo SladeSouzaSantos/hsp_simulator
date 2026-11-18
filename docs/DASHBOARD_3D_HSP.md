@@ -36,11 +36,45 @@ Enquanto a PR desta alteração ainda estiver aberta, trocar `dev`
 por `feature/dashboard-optional-3d-compass`.
 
 Abrir `http://localhost:8501`. A cena e a posição solar são
-calculadas localmente, mas **o navegador precisa alcançar
-`cdn.jsdelivr.net`** para carregar Three.js e OrbitControls.
+calculadas localmente; **o navegador não depende mais de CDN para o 3D**.
 O cálculo HSP anual com NASA POWER ou PVGIS necessita acesso à fonte
-climática. O pacote do componente está em
+climática. O código do componente está em
 `dashboard/components/solar3d_drag/`.
+
+### Compilar os assets do 3D (obrigatório ao executar fora do Docker)
+
+O editor é um componente Streamlit bidirecional com Three.js. A versão
+anterior usava importações de CDN e só enviava `componentReady`
+após a importação: quando a rede, o proxy ou o navegador atrasavam
+esse carregamento, o Streamlit podia acusar erro de inicialização.
+
+Agora o pacote é **compilado antecipadamente** (versões fixas de
+`three` e `esbuild`), o arquivo `editor.bundle.js` é servido pelo
+próprio Streamlit e o protocolo v1 inicializa antes de carregar o 3D.
+No Docker (CI/Swarm), o `Dockerfile` executa automaticamente essa
+etapa com um estágio Node.js.
+
+Para rodar localmente sem Docker, requer Node.js 22+ e executar **uma
+vez** na raiz do repositório:
+
+```powershell
+cd dashboard/components/solar3d_drag
+npm install --no-audit --no-fund
+npm run build
+cd ../../..
+python -m streamlit run dashboard.py
+```
+
+O artefato gerado `editor.bundle.js` e `node_modules/` são ignorados
+pelo Git. Se o bundle local não existir, o dashboard mostra uma mensagem
+de correção em vez de abrir um componente vazio. O 3D é opcional; é
+possível desativá-lo e calcular o HSP normalmente sem obstruções.
+
+**Diagnóstico em ambiente DEV**: conferir se o build GHCR passou;
+validar se o iframe do componente e `editor.bundle.js` retornam HTTP
+200 nos DevTools → Network do navegador; examinar Console para erros
+de WebGL. Caso a página ainda falhe, verificar o proxy Nginx e eventual
+regra de Cloudflare para caminhos de componente do Streamlit.
 
 ## Usar o editor
 
@@ -169,6 +203,7 @@ sombras finas. Não equivale a certificação de engenharia nem a PVsyst.
 
 Os controles agrupam placas com **mesma orientação e dimensões**;
 não é possível modelar orientações diferentes por MPPT nesta versão.
-A implementação usa scripts ES modules remotos do jsDelivr:
-para instalações completamente offline, será necessário empacotar
-Three.js localmente.
+O Three.js é **empacotado localmente**; o carregamento do
+visualizador não depende de CDN. O navegador precisa oferecer suporte
+a WebGL. A compilação necessita acesso ao registry npm somente no
+build inicial; a execução do editor não exige essa conexão.
