@@ -34,10 +34,14 @@ class SolarEngine:
         }
 
     def calcular_projeto_solar(self, perez_engine, dados_pre_carregados=None,
-                               config_obstaculo=None, formato='dict', force_provider=None):
+                               config_obstaculo=None, formato='dict', force_provider=None,
+                               scene3d=None):
         climate = dados_pre_carregados if dados_pre_carregados is not None else \
             self.repository.get_standardized_data(perez_engine.lat, perez_engine.lon, force_provider=force_provider)
-        result = perez_engine.calcular_hsp_corrigido_inc_azi(climate, config_obstaculo)
+        result = (perez_engine.calcular_hsp_corrigido_inc_azi(
+            climate, config_obstaculo, scene3d=scene3d)
+            if scene3d is not None else
+            perez_engine.calcular_hsp_corrigido_inc_azi(climate, config_obstaculo))
         wrapped = self._wrap(result, climate)
         return json.dumps(wrapped, ensure_ascii=False, indent=2) if formato == 'json' else wrapped
 
