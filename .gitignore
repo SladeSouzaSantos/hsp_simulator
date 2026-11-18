@@ -11,3 +11,7 @@ coverage.xml
 
 # Respostas PVGIS de validação; regeneráveis e dependentes da rede
 benchmarks/documents/cache_pvgis_validacao/
+
+# Frontend do componente 3D: dependências e artefato compilado
+**/node_modules/
+dashboard/components/solar3d_drag/editor.bundle.js
