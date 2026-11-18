@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import {updateSelection, applyDropPositions} from "./selection_logic.mjs";
 
 // A viewport Streamlit Component, not st.components.v1.html: this sends
 // edited positions back to Python, so HSP uses exactly the visible scene.
@@ -263,17 +264,10 @@ function publish() {
   });
 }
 function selectHit(key, event) {
-  const [kind,id] = key.split(":");
-  const panel=editableScene.panels.find(p=>p.id===id);
-  const groupSelect=kind==="panel" && (event.shiftKey || groupMode.checked) && panel;
-  const chosen=groupSelect ?
-    editableScene.panels.filter(p=>p.mppt_id===panel.mppt_id).map(p=>"panel:"+p.id) : [key];
-  if(event.ctrlKey || event.metaKey){
-    const allPresent=chosen.every(k=>selections.has(k));
-    for(const k of chosen) allPresent ? selections.delete(k):selections.add(k);
-  }else if(!selections.has(key) || groupSelect){
-    selections = new Set(chosen);
-  }
+  selections = new Set(updateSelection([...selections],key,editableScene,{
+    ctrl:event.ctrlKey, meta:event.metaKey, shift:event.shiftKey,
+    groupMode:groupMode.checked,
+  }));
   updateHighlight();
 }
 renderer.domElement.addEventListener("pointerdown", event => {
@@ -321,18 +315,14 @@ function finishDrag(event) {
   if(!lastDrag || event.pointerId !== lastDrag.id)return;
   event.preventDefault();
   event.stopImmediatePropagation();
+  const moved={};
   for(const key of lastDrag.initialPositions.keys()){
     const entry=objects.get(key);
     if(!entry)continue;
-    const [kind,id]=key.split(":");
-    const target=kind==="panel" ?
-      editableScene.panels.find(p=>p.id===id) :
-      editableScene.obstacles.find(o=>o.id===id);
-    if(target){
-      target.x_m=clamp(entry.root.position.x);
-      target.y_m=clamp(-entry.root.position.z);
-    }
+    moved[key]={x_m:clamp(entry.root.position.x),
+                y_m:clamp(-entry.root.position.z)};
   }
+  editableScene=applyDropPositions(editableScene,moved);
   lastDrag=null;
   controls.enabled=true;
   if(renderer.domElement.hasPointerCapture(event.pointerId))
