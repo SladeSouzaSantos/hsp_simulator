@@ -1,0 +1,16 @@
+{
+  "name": "hsp-solar3d-streamlit-component",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Self-contained optical Solar 3D Streamlit v1 frontend",
+  "scripts": {
+    "build": "esbuild editor.js --bundle --format=esm --target=es2020 --minify --outfile=editor.bundle.js",
+    "check": "node --input-type=module --check < editor.js"
+  },
+  "dependencies": {
+    "three": "0.169.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.24.0"
+  }
+}
