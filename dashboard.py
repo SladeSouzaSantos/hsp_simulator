@@ -51,7 +51,7 @@ with st.sidebar:
                                      max_value=10., value=2.278, step=.01, format='%.3f')
     module_width = st.number_input('Largura física do módulo (m)', min_value=.1,
                                     max_value=10., value=1.134, step=.01, format='%.3f')
-    bottom_height = st.number_input('Altura da borda inferior ao solo (m)',
+    bottom_height = st.number_input('Altura padrão da borda inferior — novas placas (m)',
                                     min_value=0., max_value=500., value=.15,
                                     step=.05, format='%.3f')
     terrain = st.selectbox('Superfície do solo',list(ALBEDO_REFERENCE))
