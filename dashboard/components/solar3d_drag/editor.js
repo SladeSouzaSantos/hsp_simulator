@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import {updateSelection, applyDropPositions} from "./selection_logic.mjs";
+import {CARDINAL_DIRECTIONS} from "./compass_directions.mjs";
 
 // A viewport Streamlit Component, not st.components.v1.html: this sends
 // edited positions back to Python, so HSP uses exactly the visible scene.
@@ -31,6 +32,9 @@ scene.add(grid);
 const axis = new THREE.AxesHelper(2.5);
 axis.position.y = 0.008;
 scene.add(axis);
+// Geographic compass is static in world coordinates and is not draggable.
+const compass = makeCompass();
+scene.add(compass);
 
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
@@ -187,6 +191,66 @@ function polygonGeometryFromFan(vertices) {
   g.computeVertexNormals();
   return g;
 }
+function makeCompassLabel(letter, north) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 128;
+  canvas.height = 128;
+  const ctx = canvas.getContext("2d");
+  ctx.beginPath();
+  ctx.arc(64, 64, 56, 0, Math.PI * 2);
+  ctx.fillStyle = "#ffffff";
+  ctx.fill();
+  ctx.lineWidth = 8;
+  ctx.strokeStyle = north ? "#bf2b31" : "#214b66";
+  ctx.stroke();
+  ctx.fillStyle = north ? "#bf2b31" : "#214b66";
+  ctx.font = "bold 72px system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(letter, 64, 68);
+  const texture = new THREE.CanvasTexture(canvas);
+  const material = new THREE.SpriteMaterial({
+    map: texture, depthTest: false, depthWrite: false, transparent: true,
+  });
+  const sprite = new THREE.Sprite(material);
+  sprite.scale.set(0.85, 0.85, 1);
+  sprite.renderOrder = 30;
+  return sprite;
+}
+function makeCompass() {
+  const rose = new THREE.Group();
+  rose.name = "Rosa dos ventos (N/S/L/O geográficos)";
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(1.17, 1.22, 64).rotateX(-Math.PI/2),
+    new THREE.MeshBasicMaterial({color: 0x214b66,
+      side: THREE.DoubleSide, depthWrite: false}),
+  );
+  ring.position.y = 0.05;
+  rose.add(ring);
+  for(const direction of CARDINAL_DIRECTIONS) {
+    const isNorth = direction.letter === "N";
+    const arrow = new THREE.ArrowHelper(
+      new THREE.Vector3(direction.x, 0, direction.z),
+      new THREE.Vector3(0, 0.08, 0),
+      1.06, isNorth ? 0xbf2b31 : 0x214b66, 0.24, 0.15,
+    );
+    rose.add(arrow);
+    const label = makeCompassLabel(direction.letter, isNorth);
+    label.name = direction.name;
+    label.position.set(direction.x * 1.62, 0.6, direction.z * 1.62);
+    rose.add(label);
+  }
+  return rose;
+}
+function placeCompassNearScene() {
+  const bounds = new THREE.Box3();
+  for(const entry of objects.values()) bounds.expandByObject(entry.root);
+  if(!bounds.isEmpty()) {
+    // Outside the panel/obstacle footprint; does not obstruct drag picking.
+    compass.position.set(bounds.min.x - 2.7, 0, bounds.max.z + 2.7);
+  }
+}
+
 function releaseGroup(group) {
   group.traverse(o => {
     if(o.geometry) o.geometry.dispose();
@@ -216,10 +280,12 @@ function renderObjects(sun, fractions) {
     pickMeshes.push(entry.mesh);
   });
   drawSunAndShadows(sun, editableScene.obstacles, editableScene.panels);
+  placeCompassNearScene();
   for(const key of [...selections]) if(!objects.has(key))selections.delete(key);
   updateHighlight();
   if(initial) {
     const points=[...objects.values()].map(o=>o.root.position);
+    points.push(compass.position.clone());
     if(points.length) {
       const box=new THREE.Box3().setFromPoints(points);
       const center=box.getCenter(new THREE.Vector3());
