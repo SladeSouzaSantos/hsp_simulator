@@ -19,8 +19,15 @@ o grupo MPPT inteiro. Grupos MPPT são somente **organização visual**
 para 1 a várias placas; não modelam circuitos elétricos.
 A altura de cada placa é ajustada apenas numericamente. São suportados
 até 48 módulos, 16 grupos e 32 obstáculos, com data/hora solar e HSP
-recalculado a partir das posições movidas. O navegador precisa acessar
-o CDN jsDelivr para carregar o editor Three.js.
+recalculado a partir das posições movidas. O visualizador agora
+carrega Three.js **do próprio aplicativo**, sem CDN durante a execução.
+
+**Importante ao rodar sem Docker:** antes de iniciar o Streamlit, executar
+`npm install` e `npm run build` na pasta
+`dashboard/components/solar3d_drag`. A imagem Docker compila o bundle
+automaticamente em um estágio Node.js. Confira
+[diagnóstico de carregamento e instruções](docs/DASHBOARD_3D_HSP.md)
+caso o navegador não exiba o editor.
 O campo de montagem informa a **altura da borda inferior do módulo ao
 solo**; o centro é derivado da inclinação e do comprimento na rampa.
 O antigo controle visual de **tela retangular vertical** foi retirado

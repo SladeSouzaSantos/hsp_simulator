@@ -399,9 +399,9 @@ function finishDrag(event) {
 }
 renderer.domElement.addEventListener("pointerup",finishDrag,true);
 renderer.domElement.addEventListener("pointercancel",finishDrag,true);
-window.addEventListener("message", event => {
-  if(event.data?.type !== "streamlit:render") return;
-  const args=event.data.args||{};
+function handleStreamlitRender(payload) {
+  if(payload?.type !== "streamlit:render") return;
+  const args=payload.args||{};
   if (!args.scene || !args.scene.module) return;
   const next=JSON.stringify(args.scene);
   const sun=JSON.stringify(args.sun||{});
@@ -413,7 +413,22 @@ window.addEventListener("message", event => {
     renderObjects(args.sun,args.fractions);
   }
   resize();
+}
+window.addEventListener("message", event => {
+  if(event.source === window.parent) handleStreamlitRender(event.data);
 });
+// index.html already sends streamlit:componentReady, even if JS/WebGL
+// fails to initialize. Reconsume the latest render message captured
+// before the bundled editor was ready to receive it.
+const boot = window.__hsp3dBoot;
+if(boot){
+  boot.loaded = true;
+  document.getElementById("error").style.display = "none";
+  if(boot.pending) {
+    handleStreamlitRender(boot.pending);
+    boot.pending = null;
+  }
+}
 window.addEventListener("keydown", event => {
   if(event.key==="Escape"){
     selections.clear();
@@ -421,4 +436,4 @@ window.addEventListener("keydown", event => {
   }
 });
 resize();
-post("componentReady", {apiVersion: 1});
+// The Streamlit v1 handshake is sent once, synchronously from index.html.

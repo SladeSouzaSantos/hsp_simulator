@@ -14,12 +14,7 @@
     #status { padding: 8px 12px; background: #f6fafc; font-size: 12px; min-height: 32px; border-top: 1px solid #cad9e6; }
     #error { display: none; padding: 18px; background: #fff3d8; color: #754b00; line-height: 1.5; }
   </style>
-  <script type="importmap">
-    { "imports": {
-      "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
-      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
-    } }
-  </script>
+
 </head>
 <body>
   <div id="toolbar">
@@ -27,12 +22,53 @@
     <span id="guide">Clique para selecionar · <b>Ctrl</b> seleção múltipla · <b>Shift</b> selecionar MPPT · arraste para mover · fundo vazio gira a câmera · <b>Rosa dos ventos: N (Norte), S (Sul), L (Leste), O (Oeste)</b></span>
   </div>
   <div id="viewport"></div>
-  <div id="error" role="alert">Não foi possível carregar o motor 3D. Confira a conexão com a internet e o bloqueio de scripts do navegador (Three.js via jsDelivr).</div>
-  <div id="status" aria-live="polite">Carregando editor 3D…</div>
-  <script type="module" src="./editor.js"></script>
+  <div id="error" role="alert">
+    O editor 3D não conseguiu iniciar. Verifique se o navegador suporta WebGL e
+    se os arquivos estáticos do componente estão acessíveis. O cálculo de HSP
+    sem sombreamento continua disponível ao desligar a opção no painel lateral.
+    <button type="button" onclick="location.reload()">Recarregar visualizador</button>
+  </div>
+  <div id="status" aria-live="polite">Inicializando editor 3D…</div>
   <script>
-    window.addEventListener("error", () => { document.getElementById("error").style.display = "block"; });
-    window.addEventListener("unhandledrejection", () => { document.getElementById("error").style.display = "block"; });
+    // Handshake Streamlit v1 happens BEFORE loading the graphics engine.
+    // A missing JS asset or unsupported WebGL must not keep the iframe
+    // indefinitely waiting for streamlit:componentReady.
+    (() => {
+      const state = window.__hsp3dBoot = {pending: null, loaded: false};
+      const fail = (reason) => {
+        if(state.loaded) return;
+        document.getElementById("error").style.display = "block";
+        document.getElementById("status").textContent = "Falha na inicialização do editor 3D: " + reason;
+        window.parent.postMessage({
+          isStreamlitMessage: true, type: "streamlit:setFrameHeight",
+          height: document.body.scrollHeight + 2
+        }, "*");
+      };
+      window.__hsp3dBootFailure = fail;
+      window.addEventListener("message", event => {
+        if(event.source !== window.parent) return;
+        if(event.data?.type === "streamlit:render" && !state.loaded) {
+          state.pending = event.data;
+        }
+      });
+      window.addEventListener("error", event => {
+        fail(event.message || "recurso JavaScript indisponível");
+      });
+      window.addEventListener("unhandledrejection", event => {
+        fail(event.reason?.message || "módulo JavaScript indisponível");
+      });
+      window.parent.postMessage({
+        isStreamlitMessage: true, type: "streamlit:componentReady",
+        apiVersion: 1
+      }, "*");
+      window.parent.postMessage({
+        isStreamlitMessage: true, type: "streamlit:setFrameHeight",
+        height: document.body.scrollHeight + 2
+      }, "*");
+      setTimeout(() => { if(!state.loaded) fail("tempo excedido"); }, 10000);
+    })();
   </script>
+  <script type="module" src="./editor.bundle.js"
+    onerror="window.__hsp3dBootFailure?.('arquivo do editor não disponível')"></script>
 </body>
 </html>
